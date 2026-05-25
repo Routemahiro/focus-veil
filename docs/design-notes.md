@@ -6,7 +6,7 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 
 ## 要点
 
-- Electronのメインプロセスで透明・フレームレス・常時前面のBrowserWindowを作成します。
+- Electronのメインプロセスで透明・フレームレス・常時前面のBrowserWindowをディスプレイごとに作成します。
 - レンダラーは素のHTML/CSS/JavaScript/Canvasで構成し、React等の重いUIフレームワークは入れていません。
 - 通常時はクリック透過を有効化し、操作モード中だけクリック可能にします。
 - Ctrl単体の通常時操作は、非フォーカス/クリック透過との相性が悪いため安定要件から外し、`Ctrl+Shift+F` を安定操作として採用しました。
@@ -19,7 +19,7 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 | UI構成 | 素のHTML/CSS/JS | React/Vue等 | 画面端の小UIとCanvasだけなので、起動・依存・認知負荷を増やさないため |
 | 操作切替 | `Ctrl+Shift+F` | Ctrl単体グローバル検知 | ElectronのglobalShortcutはアクセラレータ登録向けで、非フォーカス透明ウィンドウがCtrl押下/解除を安定取得する設計ではないため |
 | クリック透過 | `setIgnoreMouseEvents(true, { forward: true })` | 常時クリック可能 | 背面作業を邪魔しないことを最優先にするため |
-| 水面 | 低密度サイン波ライン | 粒子、波紋大量描画、WebGL | 注意を奪わず、CPU/GPU負荷を抑えるため |
+| 水面 | 低密度の揺らぎと散発的な波紋 | 粒子、波紋大量描画、WebGL | 注意を奪わず、CPU/GPU負荷を抑えるため |
 | 通知 | 暗幕がふわっと開く | 点滅、白フラッシュ、音 | 集中を強く断ち切らないため |
 
 ## 具体例
@@ -30,7 +30,9 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 - `src/preload.js`: contextBridge経由で安全に操作モードAPIを公開。
 - `src/renderer/`: Canvas描画、ポモドーロ、タイマーUI、通知演出。
 
-BrowserWindowは `transparent: true`、`frame: false`、`skipTaskbar: true`、`focusable: false`、`alwaysOnTop: true` を基準にしています。表示範囲は `screen.getAllDisplays()` のboundsから仮想ディスプレイ矩形を作り、複数モニターにも広がるようにしています。
+BrowserWindowは `transparent: true`、`frame: false`、`skipTaskbar: true`、`focusable: false`、`alwaysOnTop: true` を基準にしています。以前は `screen.getAllDisplays()` から仮想ディスプレイ全体の大きな矩形を作っていましたが、Windowsでは片側モニターだけに見えるケースがあったため、現在は各displayのboundsごとに1枚ずつoverlay windowを作ります。
+
+タイマー状態はメインプロセスで一元管理し、全overlay windowへIPCで同期します。これにより、複数ディスプレイでも残り時間と通知演出がずれません。操作UIはprimary displayのoverlayだけに表示し、他のdisplayは操作モード中もクリック透過を維持します。
 
 ### 透明オーバーレイとクリック透過
 
@@ -42,6 +44,8 @@ overlayWindow.setFocusable(false);
 ```
 
 `forward: true` により、クリックは背面へ通しつつマウス移動イベントをレンダラーへ渡し、フォーカスライトだけ追従させます。操作モードでは `setIgnoreMouseEvents(false)` と `setFocusable(true)` に切り替え、タイマーUIだけを明瞭に操作します。
+
+複数ディスプレイ時は、primary displayのoverlayだけを操作可能にします。secondary displayのoverlayは操作モード中もクリック透過のままにし、作業画面のブロック範囲を広げすぎないようにしています。
 
 参考にした公式仕様:
 
@@ -56,14 +60,17 @@ overlayWindow.setFocusable(false);
 そのためv0.1では次の折衷にしています。
 
 - 操作モードの安定経路: `Ctrl+Shift+F`
+- overlay window再配置: `Ctrl+Shift+R`
 - 操作モード中の終了: `Esc`
 - Ctrl単体: Electronウィンドウにフォーカスがある場合のみベストエフォート
 
 これにより、背面作業を妨げる常時フォーカス取得や、ネイティブキーボードフック依存を避けています。
 
+Windows仮想デスクトップはElectron標準APIだけで「全デスクトップに常時表示」を保証できません。`setVisibleOnAllWorkspaces(true)` はベストエフォートで呼びますが、Windowsでは効果が限定的です。そのため、全overlay windowが不可視になった場合の自動再作成と、手動復帰用の `Ctrl+Shift+R` を入れています。
+
 ### 軽量化
 
-- Canvasは1枚だけです。
+- Canvasは各ディスプレイのoverlay windowごとに1枚だけです。
 - 描画は `requestAnimationFrame` 内で約30fpsに制限しています。
 - 水面は低密度の線描画だけで、WebGL、粒子、大量DOMを使っていません。
 - タイマー更新は100ms間隔ですが、表示は秒単位で、処理は単純な減算だけです。
@@ -72,7 +79,7 @@ overlayWindow.setFocusable(false);
 
 暗幕は黒14%を基準に全面へ描画します。その後、マウス周辺に半径230px前後のradial gradientを `destination-out` で抜き、背面を柔らかく見せます。操作モードでは半径を280pxにしてUI操作時の視認性を少し上げます。
 
-水面は低アルファの緑青系ラインと、ごく薄い暖色ラインを重ねています。単色テーマに寄りすぎず、背面作業の可読性を損なわない範囲に抑えています。
+水面は低アルファの緑青系ラインと、数秒おきに広がる薄い波紋で表現しています。波紋は最大6個までに制限し、描画負荷と視覚的な主張を抑えています。単色テーマに寄りすぎず、背面作業の可読性を損なわない範囲にしています。
 
 ### 通知演出
 

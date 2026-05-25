@@ -8,82 +8,164 @@ const {
   screen
 } = require('electron');
 
-let overlayWindow = null;
-let operationMode = false;
-let smokeStarted = false;
-let rendererLoaded = false;
-let windowShown = false;
-
 const isSmoke = process.argv.includes('--smoke');
 const smokeOutputDirectory = path.join(__dirname, '..', 'artifacts');
+const timerDurations = {
+  work: isSmoke ? 4 : 25 * 60,
+  break: isSmoke ? 2 : 5 * 60
+};
 
-function getVirtualDisplayBounds() {
-  const displays = screen.getAllDisplays();
-  const left = Math.min(...displays.map((display) => display.bounds.x));
-  const top = Math.min(...displays.map((display) => display.bounds.y));
-  const right = Math.max(
-    ...displays.map((display) => display.bounds.x + display.bounds.width)
-  );
-  const bottom = Math.max(
-    ...displays.map((display) => display.bounds.y + display.bounds.height)
-  );
+const overlayWindows = new Map();
 
+let controlWindow = null;
+let operationMode = false;
+let smokeStarted = false;
+let controlWindowLoaded = false;
+let controlWindowShown = false;
+let rebuildingOverlays = false;
+
+const timerState = {
+  phase: 'work',
+  running: false,
+  remaining: timerDurations.work,
+  lastTick: Date.now(),
+  notificationCount: 0
+};
+
+function getSmokeDescriptor() {
   return {
-    x: left,
-    y: top,
-    width: right - left,
-    height: bottom - top
+    key: 'smoke',
+    bounds: { x: 80, y: 80, width: 1280, height: 720 },
+    controls: true,
+    preview: true
   };
 }
 
-function getWindowBounds() {
+function getDisplayDescriptors() {
   if (isSmoke) {
-    return { x: 80, y: 80, width: 1280, height: 720 };
+    return [getSmokeDescriptor()];
   }
 
-  return getVirtualDisplayBounds();
+  const primaryDisplay = screen.getPrimaryDisplay();
+  return screen.getAllDisplays().map((display) => ({
+    key: `display-${display.id}`,
+    bounds: display.bounds,
+    controls: display.id === primaryDisplay.id,
+    preview: false
+  }));
 }
 
-function applyOverlayBounds() {
-  if (!overlayWindow || overlayWindow.isDestroyed() || isSmoke) {
+function getOverlayList() {
+  return [...overlayWindows.values()].filter((win) => !win.isDestroyed());
+}
+
+function sendToWindow(win, channel, payload) {
+  if (!win || win.isDestroyed() || win.webContents.isDestroyed()) {
     return;
   }
 
-  overlayWindow.setBounds(getWindowBounds());
+  win.webContents.send(channel, payload);
+}
+
+function tickTimerState(now = Date.now()) {
+  if (!timerState.running) {
+    timerState.lastTick = now;
+    return false;
+  }
+
+  const elapsed = (now - timerState.lastTick) / 1000;
+  timerState.lastTick = now;
+  timerState.remaining -= elapsed;
+
+  if (timerState.remaining > 0) {
+    return true;
+  }
+
+  timerState.phase = timerState.phase === 'work' ? 'break' : 'work';
+  timerState.remaining = timerDurations[timerState.phase];
+  timerState.running = false;
+  timerState.notificationCount += 1;
+  return true;
+}
+
+function getTimerSnapshot() {
+  tickTimerState();
+
+  return {
+    phase: timerState.phase,
+    running: timerState.running,
+    remaining: Number(Math.max(0, timerState.remaining).toFixed(2)),
+    notificationCount: timerState.notificationCount
+  };
+}
+
+function broadcastTimerState(source = 'main') {
+  const payload = {
+    ...getTimerSnapshot(),
+    source
+  };
+
+  for (const win of getOverlayList()) {
+    sendToWindow(win, 'focus-veil:timer-state', payload);
+  }
+}
+
+function handleTimerCommand(action) {
+  tickTimerState();
+
+  if (action === 'start') {
+    timerState.running = true;
+    timerState.lastTick = Date.now();
+  } else if (action === 'pause') {
+    timerState.running = false;
+  } else if (action === 'reset') {
+    timerState.running = false;
+    timerState.remaining = timerDurations[timerState.phase];
+    timerState.lastTick = Date.now();
+  }
+
+  broadcastTimerState(`timer:${action}`);
+  return getTimerSnapshot();
+}
+
+function applyOperationModeToWindow(win) {
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+
+  const controls = Boolean(win.focusVeilControls);
+
+  if (operationMode && controls) {
+    win.setFocusable(true);
+    win.setIgnoreMouseEvents(false);
+    win.show();
+    win.focus();
+  } else {
+    win.setIgnoreMouseEvents(true, { forward: true });
+    win.setFocusable(false);
+    win.blur();
+    win.showInactive();
+  }
+
+  win.setAlwaysOnTop(true, 'screen-saver');
 }
 
 function sendOperationMode(source) {
-  if (!overlayWindow || overlayWindow.isDestroyed()) {
-    return;
+  for (const win of getOverlayList()) {
+    sendToWindow(win, 'focus-veil:operation-mode', {
+      enabled: operationMode,
+      source
+    });
   }
-
-  overlayWindow.webContents.send('focus-veil:operation-mode', {
-    enabled: operationMode,
-    source
-  });
 }
 
 function setOperationMode(enabled, source = 'main') {
-  if (!overlayWindow || overlayWindow.isDestroyed()) {
-    operationMode = enabled;
-    return;
-  }
-
   operationMode = enabled;
 
-  if (enabled) {
-    overlayWindow.setFocusable(true);
-    overlayWindow.setIgnoreMouseEvents(false);
-    overlayWindow.show();
-    overlayWindow.focus();
-  } else {
-    overlayWindow.setIgnoreMouseEvents(true, { forward: true });
-    overlayWindow.setFocusable(false);
-    overlayWindow.blur();
-    overlayWindow.showInactive();
+  for (const win of getOverlayList()) {
+    applyOperationModeToWindow(win);
   }
 
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
   sendOperationMode(source);
 }
 
@@ -94,6 +176,14 @@ function registerShortcuts() {
 
   if (!toggleRegistered) {
     console.warn('Focus Veil: failed to register CommandOrControl+Shift+F.');
+  }
+
+  const refreshRegistered = globalShortcut.register('CommandOrControl+Shift+R', () => {
+    rebuildOverlayWindows('shortcut-refresh');
+  });
+
+  if (!refreshRegistered) {
+    console.warn('Focus Veil: failed to register CommandOrControl+Shift+R.');
   }
 }
 
@@ -143,7 +233,7 @@ async function captureSmoke(name) {
   const screenshotsDirectory = path.join(smokeOutputDirectory, 'screenshots');
   await fs.mkdir(screenshotsDirectory, { recursive: true });
 
-  const image = await overlayWindow.webContents.capturePage();
+  const image = await controlWindow.webContents.capturePage();
   const png = image.toPNG();
   const filePath = path.join(screenshotsDirectory, `${name}.png`);
   await fs.writeFile(filePath, png);
@@ -156,7 +246,7 @@ async function captureSmoke(name) {
 }
 
 async function executeInRenderer(script) {
-  return overlayWindow.webContents.executeJavaScript(script, true);
+  return controlWindow.webContents.executeJavaScript(script, true);
 }
 
 async function waitForSmokeApi() {
@@ -277,7 +367,7 @@ async function runSmoke() {
 }
 
 function maybeRunSmoke() {
-  if (!isSmoke || smokeStarted || !rendererLoaded || !windowShown) {
+  if (!isSmoke || smokeStarted || !controlWindowLoaded || !controlWindowShown) {
     return;
   }
 
@@ -285,11 +375,9 @@ function maybeRunSmoke() {
   setTimeout(runSmoke, 250);
 }
 
-function createWindow() {
-  const bounds = getWindowBounds();
-
-  overlayWindow = new BrowserWindow({
-    ...bounds,
+function buildWindowOptions(descriptor) {
+  return {
+    ...descriptor.bounds,
     title: 'Focus Veil',
     frame: false,
     transparent: true,
@@ -310,31 +398,120 @@ function createWindow() {
       nodeIntegration: false,
       backgroundThrottling: false
     }
-  });
+  };
+}
 
-  overlayWindow.setMenuBarVisibility(false);
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
-  overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+function createOverlayWindow(descriptor) {
+  const win = new BrowserWindow(buildWindowOptions(descriptor));
+  win.focusVeilKey = descriptor.key;
+  win.focusVeilControls = descriptor.controls;
 
-  overlayWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
+  overlayWindows.set(descriptor.key, win);
+
+  if (descriptor.controls) {
+    controlWindow = win;
+  }
+
+  win.setMenuBarVisibility(false);
+  win.setAlwaysOnTop(true, 'screen-saver');
+  win.setIgnoreMouseEvents(true, { forward: true });
+
+  try {
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  } catch {
+    // Best effort only. Electron documents this as unsupported on Windows.
+  }
+
+  win.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
     query: {
       smoke: isSmoke ? '1' : '0',
-      preview: isSmoke ? '1' : '0'
+      preview: descriptor.preview ? '1' : '0',
+      controls: descriptor.controls ? '1' : '0',
+      display: descriptor.key
     }
   });
 
-  overlayWindow.once('ready-to-show', () => {
-    windowShown = true;
-    overlayWindow.showInactive();
+  win.once('ready-to-show', () => {
+    win.showInactive();
+    applyOperationModeToWindow(win);
     sendOperationMode('ready');
-    maybeRunSmoke();
+    sendToWindow(win, 'focus-veil:timer-state', getTimerSnapshot());
+
+    if (descriptor.controls) {
+      controlWindowShown = true;
+      maybeRunSmoke();
+    }
   });
 
-  overlayWindow.webContents.once('did-finish-load', () => {
-    rendererLoaded = true;
-    console.log('FOCUS_VEIL_READY');
-    maybeRunSmoke();
+  win.webContents.once('did-finish-load', () => {
+    console.log(`FOCUS_VEIL_READY ${descriptor.key}`);
+    sendOperationMode('load');
+    sendToWindow(win, 'focus-veil:timer-state', getTimerSnapshot());
+
+    if (descriptor.controls) {
+      controlWindowLoaded = true;
+      maybeRunSmoke();
+    }
   });
+
+  win.on('closed', () => {
+    overlayWindows.delete(descriptor.key);
+    if (controlWindow === win) {
+      controlWindow = null;
+    }
+  });
+
+  return win;
+}
+
+function createOverlayWindows() {
+  controlWindow = null;
+  controlWindowLoaded = false;
+  controlWindowShown = false;
+
+  for (const descriptor of getDisplayDescriptors()) {
+    createOverlayWindow(descriptor);
+  }
+}
+
+function rebuildOverlayWindows(source = 'rebuild') {
+  if (!app.isReady()) {
+    return;
+  }
+
+  rebuildingOverlays = true;
+
+  for (const win of getOverlayList()) {
+    win.destroy();
+  }
+
+  overlayWindows.clear();
+  createOverlayWindows();
+
+  setTimeout(() => {
+    setOperationMode(operationMode, source);
+    broadcastTimerState(source);
+    rebuildingOverlays = false;
+  }, 500);
+}
+
+function maintainOverlayPresence() {
+  if (isSmoke || operationMode || overlayWindows.size === 0) {
+    return;
+  }
+
+  const windows = getOverlayList();
+  const hiddenCount = windows.filter((win) => !win.isVisible()).length;
+
+  if (hiddenCount === windows.length) {
+    rebuildOverlayWindows('visibility-refresh');
+    return;
+  }
+
+  for (const win of windows) {
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.showInactive();
+  }
 }
 
 ipcMain.handle('focus-veil:set-operation-mode', (_event, enabled) => {
@@ -344,19 +521,34 @@ ipcMain.handle('focus-veil:set-operation-mode', (_event, enabled) => {
 
 ipcMain.handle('focus-veil:get-main-state', () => ({
   operationMode,
-  smoke: isSmoke
+  smoke: isSmoke,
+  timer: getTimerSnapshot(),
+  overlays: getOverlayList().map((win) => ({
+    key: win.focusVeilKey,
+    controls: Boolean(win.focusVeilControls),
+    bounds: win.getBounds()
+  }))
 }));
 
+ipcMain.handle('focus-veil:timer-command', (_event, action) => handleTimerCommand(action));
+
 app.whenReady().then(() => {
-  createWindow();
+  createOverlayWindows();
   registerShortcuts();
 
-  screen.on('display-added', applyOverlayBounds);
-  screen.on('display-removed', applyOverlayBounds);
-  screen.on('display-metrics-changed', applyOverlayBounds);
+  screen.on('display-added', () => rebuildOverlayWindows('display-added'));
+  screen.on('display-removed', () => rebuildOverlayWindows('display-removed'));
+  screen.on('display-metrics-changed', () => rebuildOverlayWindows('display-metrics-changed'));
+
+  setInterval(() => broadcastTimerState('tick'), 250);
+  setInterval(maintainOverlayPresence, 2500);
 });
 
 app.on('window-all-closed', () => {
+  if (rebuildingOverlays) {
+    return;
+  }
+
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -368,6 +560,6 @@ app.on('will-quit', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+    createOverlayWindows();
   }
 });

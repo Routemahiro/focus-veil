@@ -9,6 +9,7 @@ const timerControls = document.querySelector('.timer-controls');
 const query = new URLSearchParams(window.location.search);
 const isSmoke = query.get('smoke') === '1';
 const isPreview = query.get('preview') === '1';
+const hasControls = query.get('controls') !== '0';
 const durations = {
   work: isSmoke ? 4 : 25 * 60,
   break: isSmoke ? 2 : 5 * 60
@@ -22,9 +23,11 @@ const state = {
   phase: 'work',
   running: false,
   remaining: durations.work,
-  lastTimerTick: performance.now(),
   notificationUntil: 0,
-  notificationCount: 0
+  notificationCount: 0,
+  lastNotificationCount: 0,
+  nextRippleAt: performance.now() + 1800 + Math.random() * 1800,
+  ripples: []
 };
 
 function resizeCanvas() {
@@ -61,42 +64,79 @@ function formatTime(seconds) {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
-function drawWater(width, height, now, pulse) {
-  const spacing = 86;
-  const time = now * 0.00018;
-  context.save();
-  context.lineWidth = 1;
-  context.globalAlpha = 0.34 + pulse * 0.1;
+function addRipple(now, x, y, strength = 1) {
+  state.ripples.push({
+    x,
+    y,
+    start: now,
+    duration: 5200 + Math.random() * 1600,
+    maxRadius: 110 + Math.random() * 130,
+    strength
+  });
 
-  for (let row = -spacing; row < height + spacing; row += spacing) {
+  if (state.ripples.length > 6) {
+    state.ripples.shift();
+  }
+}
+
+function updateRipples(width, height, now) {
+  if (now >= state.nextRippleAt) {
+    const marginX = width * 0.12;
+    const marginY = height * 0.14;
+    addRipple(
+      now,
+      marginX + Math.random() * Math.max(1, width - marginX * 2),
+      marginY + Math.random() * Math.max(1, height - marginY * 2),
+      0.78
+    );
+    state.nextRippleAt = now + 4200 + Math.random() * 4200;
+  }
+
+  state.ripples = state.ripples.filter((ripple) => now - ripple.start < ripple.duration);
+}
+
+function drawRippleField(width, height, now, pulse) {
+  updateRipples(width, height, now);
+
+  context.save();
+  context.globalCompositeOperation = 'source-over';
+
+  const drift = now * 0.00016;
+  for (let row = height * 0.18; row < height; row += 150) {
     context.beginPath();
-    for (let x = -40; x <= width + 40; x += 18) {
+    for (let x = -60; x <= width + 60; x += 36) {
       const y =
         row +
-        Math.sin(x * 0.012 + time + row * 0.01) * 5 +
-        Math.sin(x * 0.028 - time * 0.7) * 2;
-
-      if (x === -40) {
+        Math.sin(x * 0.01 + drift + row * 0.018) * 4 +
+        Math.sin(x * 0.023 - drift * 0.8) * 2;
+      if (x === -60) {
         context.moveTo(x, y);
       } else {
         context.lineTo(x, y);
       }
     }
-    context.strokeStyle = 'rgba(130, 207, 196, 0.08)';
+    context.lineWidth = 1;
+    context.strokeStyle = 'rgba(148, 210, 202, 0.045)';
     context.stroke();
   }
 
-  for (let row = -spacing / 2; row < height + spacing; row += spacing * 1.45) {
+  for (const ripple of state.ripples) {
+    const age = now - ripple.start;
+    const progress = Math.max(0, Math.min(1, age / ripple.duration));
+    const eased = 1 - Math.pow(1 - progress, 2.2);
+    const radius = ripple.maxRadius * eased;
+    const alpha = (1 - progress) * (0.105 + pulse * 0.04) * ripple.strength;
+
     context.beginPath();
-    for (let x = -40; x <= width + 40; x += 24) {
-      const y = row + Math.sin(x * 0.015 - time * 0.9 + row * 0.02) * 3;
-      if (x === -40) {
-        context.moveTo(x, y);
-      } else {
-        context.lineTo(x, y);
-      }
-    }
-    context.strokeStyle = 'rgba(236, 210, 148, 0.035)';
+    context.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2);
+    context.lineWidth = 1.2 + progress * 1.4;
+    context.strokeStyle = `rgba(166, 226, 216, ${alpha.toFixed(3)})`;
+    context.stroke();
+
+    context.beginPath();
+    context.arc(ripple.x, ripple.y, radius * 0.58, 0, Math.PI * 2);
+    context.lineWidth = 0.8;
+    context.strokeStyle = `rgba(238, 220, 168, ${(alpha * 0.42).toFixed(3)})`;
     context.stroke();
   }
 
@@ -150,7 +190,7 @@ function drawVeil(now = performance.now()) {
   context.arc(state.mouseX, state.mouseY, radius * 0.82, 0, Math.PI * 2);
   context.fill();
 
-  drawWater(width, height, now, pulse);
+  drawRippleField(width, height, now, pulse);
 }
 
 let lastDraw = 0;
@@ -180,51 +220,23 @@ function updateTimerUi() {
 
 function triggerNotification() {
   state.notificationUntil = performance.now() + 1600;
-  state.notificationCount += 1;
-}
-
-function completePhase() {
-  triggerNotification();
-  state.phase = state.phase === 'work' ? 'break' : 'work';
-  state.remaining = durations[state.phase];
-  state.running = false;
-  state.lastTimerTick = performance.now();
-  updateTimerUi();
-}
-
-function startTimer() {
-  state.running = true;
-  state.lastTimerTick = performance.now();
-  updateTimerUi();
-}
-
-function pauseTimer() {
-  state.running = false;
-  updateTimerUi();
-}
-
-function resetTimer() {
-  state.running = false;
-  state.remaining = durations[state.phase];
-  state.lastTimerTick = performance.now();
-  updateTimerUi();
-}
-
-function tickTimer() {
   const now = performance.now();
+  addRipple(now, state.mouseX, state.mouseY, 1.15);
+}
 
-  if (!state.running) {
-    state.lastTimerTick = now;
+function applyTimerState(timerState) {
+  if (!timerState) {
     return;
   }
 
-  const elapsed = (now - state.lastTimerTick) / 1000;
-  state.lastTimerTick = now;
-  state.remaining -= elapsed;
+  state.phase = timerState.phase;
+  state.running = timerState.running;
+  state.remaining = timerState.remaining;
+  state.notificationCount = timerState.notificationCount;
 
-  if (state.remaining <= 0) {
-    completePhase();
-    return;
+  if (state.notificationCount > state.lastNotificationCount) {
+    state.lastNotificationCount = state.notificationCount;
+    triggerNotification();
   }
 
   updateTimerUi();
@@ -238,23 +250,20 @@ function getPublicState() {
     remaining: Number(state.remaining.toFixed(2)),
     timeText: timeReadout.textContent,
     notificationCount: state.notificationCount,
-    controlsVisible: getComputedStyle(timerControls).display !== 'none'
+    controlsVisible: hasControls && getComputedStyle(timerControls).display !== 'none'
   };
 }
 
-timerControls.addEventListener('click', (event) => {
+timerControls.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-action]');
   if (!button) {
     return;
   }
 
-  const action = button.dataset.action;
-  if (action === 'start') {
-    startTimer();
-  } else if (action === 'pause') {
-    pauseTimer();
-  } else if (action === 'reset') {
-    resetTimer();
+  try {
+    applyTimerState(await window.focusVeil?.timerCommand(button.dataset.action));
+  } catch {
+    updateTimerUi();
   }
 });
 
@@ -288,14 +297,22 @@ window.focusVeil?.onOperationModeChanged(({ enabled }) => {
   setOperationMode(enabled);
 });
 
+window.focusVeil?.onTimerStateChanged((timerState) => {
+  applyTimerState(timerState);
+});
+
 if (isPreview) {
   body.classList.add('preview-mode');
 }
 
+if (!hasControls) {
+  body.classList.add('overlay-only');
+}
+
 if (isSmoke) {
   window.focusVeilSmoke = {
-    click(action) {
-      document.querySelector(`button[data-action="${action}"]`)?.click();
+    async click(action) {
+      applyTimerState(await window.focusVeil?.timerCommand(action));
       return getPublicState();
     },
     getState: getPublicState,
@@ -304,8 +321,9 @@ if (isSmoke) {
       state.mouseY = y;
       return getPublicState();
     },
-    setOperationMode(enabled) {
+    async setOperationMode(enabled) {
       setOperationMode(Boolean(enabled));
+      await window.focusVeil?.setOperationMode(Boolean(enabled));
       return getPublicState();
     },
     triggerNotification() {
@@ -317,5 +335,4 @@ if (isSmoke) {
 
 resizeCanvas();
 updateTimerUi();
-setInterval(tickTimer, 100);
 requestAnimationFrame(animationLoop);

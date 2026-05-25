@@ -104,6 +104,10 @@ body.preview-mode .preview-backdrop {
   pointer-events: none;
 }
 
+body.overlay-only .overlay-ui {
+  display: none;
+}
+
 .timer-panel {
   min-width: 112px;
   border: 1px solid rgba(210, 224, 224, 0.18);

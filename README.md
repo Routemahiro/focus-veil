@@ -26,15 +26,16 @@ npm run smoke
 - 通常時: 画面右下に残り時間だけを表示します。ウィンドウはクリック透過です。
 - 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset` を表示し、クリックできます。
 - 操作モード終了: `Ctrl+Shift+F` で再切り替え、または操作モード中に `Esc`。
+- オーバーレイ再配置: `Ctrl+Shift+R`。Windows仮想デスクトップ切り替え後に表示が戻らない場合の復帰用です。
 - Ctrl単体: Electronウィンドウにフォーカスがある場合のみベストエフォートで反応します。通常のクリック透過状態では背面作業を優先するため、安定操作は `Ctrl+Shift+F` に寄せています。
 
 ## 設計方針
 
 - React等のUIフレームワークは使わず、Electron + HTML/CSS/JavaScript/Canvasで構成しています。
-- 透明・フレームレス・常時前面のBrowserWindowを、仮想ディスプレイ全体へ広げます。
+- 透明・フレームレス・常時前面のBrowserWindowを、ディスプレイごとに1枚ずつ作成します。
 - 通常時は `setIgnoreMouseEvents(true, { forward: true })` でクリック透過にし、マウス移動だけをCanvasのフォーカスライトへ反映します。
 - 暗幕は黒14%を基準にし、通知時も白飛びや点滅を避けて1.6秒でふわっと開く演出にしています。
-- 水面表現は低密度のサイン波ラインのみで、背面テキストやUIの可読性を優先しています。
+- 水面表現は低密度の揺らぎと、ときどき出る薄い波紋に絞り、背面テキストやUIの可読性を優先しています。
 
 ## 検証結果
 
@@ -44,7 +45,7 @@ npm run smoke
 - `npm audit --omit=optional`: 0 vulnerabilities。
 - `node --check`: `src/main.js`、`src/preload.js`、`src/renderer/renderer.js` で成功。
 - `npm run smoke`: 成功。Start/Pause/Reset、短時間タイマー遷移、通知演出、3枚のスクリーンショット生成を確認。
-- `npm start`: `FOCUS_VEIL_READY` まで到達。8秒起動時点でElectron 4プロセス、Working Set概算311.7MB、stderrなし。
+- `npm start`: `FOCUS_VEIL_READY` まで到達。2026-05-25の2画面環境で `display-...` が2件出力され、ディスプレイ別overlay window作成を確認。
 
 詳細は `docs/verification-log.md` を参照してください。
 
@@ -52,7 +53,8 @@ npm run smoke
 
 - Ctrl単体をグローバルに押下/解除検知する実装は採用していません。クリック透過・非フォーカスの安定性を優先し、`Ctrl+Shift+F` の操作モード切り替えを採用しています。
 - OSレベルで背面アプリへ実クリックが届くことは、コードとElectron API前提で確認していますが、長時間の実作業操作までは未確認です。
-- マルチモニター/DPI差分は仮想ディスプレイ全体へ広げるコードを入れていますが、実機差分の手動確認は未実施です。
+- Windows仮想デスクトップへの自動追従はベストエフォートです。Electron標準APIだけではWindows上で全仮想デスクトップへ確実にピン留めできないため、表示が戻らない場合は `Ctrl+Shift+R` でoverlay windowを現在のデスクトップへ作り直します。
+- マルチモニター/DPI差分はディスプレイごとのboundsで作成する構成に変更済みですが、DPI混在と負座標配置の手動確認は未実施です。
 - インストーラー、トレイ常駐、BGM/音声通知、複数テーマ、複雑な設定保存はv0.1の対象外です。
 
 ## 残課題
