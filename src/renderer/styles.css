@@ -6,12 +6,106 @@ body {
   overflow: hidden;
   font-family: "Segoe UI", system-ui, sans-serif;
   background: transparent;
+  user-select: none;
 }
 
-.app-shell {
+#veil-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+}
+
+.overlay-ui {
+  position: fixed;
+  right: clamp(12px, 2vw, 28px);
+  bottom: clamp(12px, 2vw, 28px);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.timer-panel {
+  min-width: 112px;
+  border: 1px solid rgba(210, 224, 224, 0.18);
+  border-radius: 8px;
+  color: rgba(244, 250, 248, 0.92);
+  background: rgba(20, 29, 31, 0.34);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(8px);
+  transition:
+    min-width 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.timer-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  padding: 5px 8px;
+}
+
+.mode-label {
+  display: none;
+  color: rgba(206, 226, 222, 0.8);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.time-readout {
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.timer-controls {
+  display: none;
+  grid-template-columns: repeat(3, minmax(54px, 1fr));
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+
+.timer-controls button {
+  min-height: 30px;
+  border: 1px solid rgba(219, 232, 229, 0.2);
+  border-radius: 6px;
+  color: rgba(244, 250, 248, 0.94);
+  background: rgba(42, 58, 60, 0.72);
+  font: inherit;
+  font-size: 12px;
+}
+
+.timer-controls button:hover,
+.timer-controls button:focus-visible {
+  border-color: rgba(130, 207, 196, 0.58);
+  background: rgba(57, 79, 81, 0.86);
+  outline: none;
+}
+
+body.operation-mode .overlay-ui {
+  pointer-events: auto;
+}
+
+body.operation-mode .timer-panel {
+  min-width: 248px;
+  background: rgba(18, 29, 32, 0.58);
+  border-color: rgba(210, 224, 224, 0.28);
+}
+
+body.operation-mode .mode-label {
+  display: block;
+}
+
+body.operation-mode .timer-controls {
   display: grid;
-  min-height: 100%;
-  place-content: center;
-  color: #f7fafc;
-  background: rgba(0, 0, 0, 0.16);
+}
+
+body.operation-mode .timer-line {
+  padding: 8px 10px;
 }

@@ -7,9 +7,19 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
-    <main class="app-shell">
-      <h1>Focus Veil</h1>
-      <p>Transparent overlay shell.</p>
+    <canvas id="veil-canvas" aria-hidden="true"></canvas>
+    <main class="overlay-ui" aria-label="Focus Veil timer">
+      <section class="timer-panel" data-mode="work">
+        <div class="timer-line">
+          <span class="mode-label">Focus</span>
+          <span class="time-readout" id="time-readout">25:00</span>
+        </div>
+        <div class="timer-controls" aria-label="Timer controls">
+          <button type="button" data-action="start">Start</button>
+          <button type="button" data-action="pause">Pause</button>
+          <button type="button" data-action="reset">Reset</button>
+        </div>
+      </section>
     </main>
     <script src="./renderer.js"></script>
   </body>
