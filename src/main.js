@@ -125,7 +125,8 @@ function createWindow() {
 
   overlayWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
     query: {
-      smoke: isSmoke ? '1' : '0'
+      smoke: isSmoke ? '1' : '0',
+      preview: isSmoke ? '1' : '0'
     }
   });
 

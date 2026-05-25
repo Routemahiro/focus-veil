@@ -9,6 +9,85 @@ body {
   user-select: none;
 }
 
+.preview-backdrop {
+  display: none;
+}
+
+body.preview-mode .preview-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(90deg, rgba(26, 41, 46, 0.04) 1px, transparent 1px),
+    linear-gradient(rgba(26, 41, 46, 0.04) 1px, transparent 1px),
+    #eef2ee;
+  background-size: 42px 42px;
+}
+
+.preview-window {
+  width: min(860px, calc(100vw - 96px));
+  min-height: 430px;
+  border: 1px solid rgba(61, 79, 76, 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+  color: #22302f;
+  background: rgba(250, 252, 249, 0.96);
+  box-shadow: 0 20px 70px rgba(24, 34, 34, 0.22);
+}
+
+.preview-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  height: 42px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(61, 79, 76, 0.14);
+  background: #dfe8e5;
+}
+
+.preview-toolbar span {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #6a8f8a;
+}
+
+.preview-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 36px;
+  padding: 44px;
+}
+
+.preview-column strong {
+  display: block;
+  margin-bottom: 20px;
+  font-size: 28px;
+}
+
+.preview-column p {
+  max-width: 58ch;
+  margin: 0 0 18px;
+  color: #3f5350;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.preview-list {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.preview-list span {
+  height: 52px;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(69, 91, 87, 0.2), rgba(69, 91, 87, 0.04)),
+    #edf3f0;
+}
+
 #veil-canvas {
   position: fixed;
   inset: 0;
@@ -37,6 +116,10 @@ body {
     min-width 160ms ease,
     background-color 160ms ease,
     border-color 160ms ease;
+}
+
+.timer-panel[data-mode="break"] {
+  border-color: rgba(230, 197, 125, 0.24);
 }
 
 .timer-line {
@@ -88,6 +171,10 @@ body {
   outline: none;
 }
 
+body.timer-running .timer-controls button[data-action="start"] {
+  color: rgba(192, 218, 214, 0.72);
+}
+
 body.operation-mode .overlay-ui {
   pointer-events: auto;
 }
@@ -108,4 +195,14 @@ body.operation-mode .timer-controls {
 
 body.operation-mode .timer-line {
   padding: 8px 10px;
+}
+
+@media (max-width: 560px) {
+  .timer-controls {
+    grid-template-columns: 1fr;
+  }
+
+  body.operation-mode .timer-panel {
+    min-width: 168px;
+  }
 }

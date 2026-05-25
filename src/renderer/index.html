@@ -7,11 +7,33 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
+    <div class="preview-backdrop" aria-hidden="true">
+      <div class="preview-window">
+        <div class="preview-toolbar">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="preview-content">
+          <div class="preview-column">
+            <strong>Quarterly notes</strong>
+            <p>Focus Veil keeps the workspace readable while softening unused areas.</p>
+            <p>Text, forms, and controls should remain visible behind the overlay.</p>
+          </div>
+          <div class="preview-list">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      </div>
+    </div>
     <canvas id="veil-canvas" aria-hidden="true"></canvas>
     <main class="overlay-ui" aria-label="Focus Veil timer">
       <section class="timer-panel" data-mode="work">
         <div class="timer-line">
-          <span class="mode-label">Focus</span>
+          <span class="mode-label" id="mode-label">Focus</span>
           <span class="time-readout" id="time-readout">25:00</span>
         </div>
         <div class="timer-controls" aria-label="Timer controls">
