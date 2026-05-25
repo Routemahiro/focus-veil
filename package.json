@@ -1,0 +1,22 @@
+{
+  "name": "focus-veil",
+  "version": "0.1.0",
+  "description": "A lightweight transparent focus overlay for Windows.",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --smoke"
+  },
+  "keywords": [
+    "electron",
+    "overlay",
+    "focus",
+    "pomodoro"
+  ],
+  "author": "Routemahiro",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "41.7.0"
+  }
+}

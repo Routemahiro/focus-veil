@@ -1,0 +1,17 @@
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: transparent;
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  color: #f7fafc;
+  background: rgba(0, 0, 0, 0.16);
+}
