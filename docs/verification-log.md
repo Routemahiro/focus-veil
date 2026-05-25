@@ -1,0 +1,106 @@
+# Verification Log
+
+## 2026-05-25
+
+### 実行環境
+
+- OS: Windows
+- Workspace: `C:\Users\aaa_a\OneDrive\ドキュメント\FocusVeil`
+- Node.js: `v20.12.2`
+- npm: `10.7.0`
+- Electron: `41.7.0`
+- GitHub CLI: `C:\Program Files\GitHub CLI\gh.exe`
+- GitHub auth: `Routemahiro` で認証済み
+
+### 実行コマンド
+
+| コマンド | 結果 | メモ |
+| --- | --- | --- |
+| `node --version` | 成功 | `v20.12.2` |
+| `npm --version` | 成功 | `10.7.0` |
+| `gh auth status` | 成功 | `Routemahiro`、repo scopeあり |
+| `npm view electron version` | 成功 | 最新は`42.2.0`だったが、Node 20ではengine警告あり |
+| `npm install` | 成功 | Electronを`41.7.0`に固定後、engine警告なし |
+| `npm audit --omit=optional` | 成功 | `found 0 vulnerabilities` |
+| `node --check src/main.js` | 成功 | 構文OK |
+| `node --check src/preload.js` | 成功 | 構文OK |
+| `node --check src/renderer/renderer.js` | 成功 | 構文OK |
+| `npm run smoke` | 成功 | レポート: `artifacts/smoke-report.json` |
+| `npm start` | 成功 | `FOCUS_VEIL_READY` を確認し、起動後にプロセス停止 |
+
+### 問題、修正、再確認
+
+| 問題 | 影響 | 修正 | 再確認 |
+| --- | --- | --- | --- |
+| Electron `42.2.0` はNode `20.12.2`でengine警告 | 将来のinstall/start不安定化 | Electronを`41.7.0`へ固定 | `npm install` と `npm audit --omit=optional` 成功 |
+| smoke初回で `nativeImage.getBitmap()` 非推奨警告 | 検証ログが汚れる | `toBitmap()` へ変更 | `npm run smoke` 再実行で警告なし |
+| メモリ採取用PowerShellが起動中ログを読んで失敗 | アプリ本体ではなく検証コマンドの問題 | プロセス停止後にログを読む形へ変更 | 再実行でメモリ概算取得、残プロセスなし |
+
+### smoke確認
+
+`npm run smoke` は短時間テストモードで次を確認しました。
+
+| 確認項目 | 結果 |
+| --- | --- |
+| 通常時に操作ボタンが非表示 | OK |
+| 操作モードで操作ボタンが表示 | OK |
+| `Start` でタイマー開始 | OK |
+| `Pause` でタイマー停止 | OK |
+| `Reset` で作業時間へ復帰 | OK |
+| 4秒作業タイマー到達で休憩へ遷移 | OK |
+| 通知演出カウントが増える | OK |
+| 通常時スクリーンショットが非ブランク | OK |
+| 操作時スクリーンショットが非ブランク | OK |
+| 通知演出スクリーンショットが非ブランク | OK |
+
+スクリーンショット:
+
+- `artifacts/screenshots/normal.png`
+- `artifacts/screenshots/operation.png`
+- `artifacts/screenshots/notification.png`
+
+目視確認:
+
+- 通常時は右下に時間だけが表示された。
+- 操作時はStart/Pause/Resetが表示され、ボタン文字のはみ出しは見当たらなかった。
+- 通知演出中は白飛びや強いフラッシュではなく、暗幕が少し開く程度だった。
+- プレビュー背景の文章は読み取れ、暗幕と水面が可読性を大きく損なう状態ではなかった。
+
+### 通常起動確認
+
+`npm start` を短時間起動し、標準出力の `FOCUS_VEIL_READY` を確認しました。8秒起動時点の概算は次の通りです。
+
+| 項目 | 結果 |
+| --- | --- |
+| READY到達 | OK |
+| stderr | 0 bytes |
+| Electronプロセス数 | 4 |
+| Working Set概算 | 311.7 MB |
+| 起動後の残プロセス | なし |
+
+内訳:
+
+- main: 91.9 MB / CPU 0.33s
+- gpu: 97.3 MB / CPU 1.03s
+- utility: 47.1 MB / CPU 0.05s
+- renderer: 75.4 MB / CPU 0.34s
+
+### コード確認
+
+| 項目 | 状態 |
+| --- | --- |
+| 透明全画面オーバーレイ | `transparent: true`、`frame: false`、仮想ディスプレイboundsで実装 |
+| 通常時クリック透過 | `setIgnoreMouseEvents(true, { forward: true })` で実装 |
+| 操作時クリック可能 | 操作モードで `setIgnoreMouseEvents(false)` に切り替え |
+| 操作モード | `Ctrl+Shift+F` のglobalShortcutで実装 |
+| Ctrl単体 | フォーカス中のみベストエフォート。通常時の安定経路にはしない |
+| ポモドーロ | 作業25分/休憩5分、smokeでは4秒/2秒 |
+| 通知演出 | 1.6秒、暗幕alphaとライト半径のみ変化 |
+| 除外項目 | 音声、BGM、複数テーマ、トレイ、インストーラー、複雑な設定保存は未実装 |
+
+### 未確認範囲
+
+- 実作業アプリに対して、通常時クリックがOSレベルで常に背面へ届くかの長時間手動確認。
+- マルチモニター、負座標モニター、DPI混在環境での表示範囲とマウス追従。
+- 25分/5分の実時間到達。v0.1では短時間テストモードで通知演出を確認。
+- 長時間常駐時のCPU/GPU推移とバッテリー影響。
