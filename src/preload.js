@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('focusVeil', {
   getMainState: () => ipcRenderer.invoke('focus-veil:get-main-state'),
   setOperationMode: (enabled) =>
     ipcRenderer.invoke('focus-veil:set-operation-mode', Boolean(enabled)),
+  getCaptureSource: () => ipcRenderer.invoke('focus-veil:get-capture-source'),
   timerCommand: (action) => ipcRenderer.invoke('focus-veil:timer-command', action),
   onOperationModeChanged: (callback) => {
     const listener = (_event, payload) => callback(payload);

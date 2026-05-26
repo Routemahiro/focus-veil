@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const {
   app,
   BrowserWindow,
+  desktopCapturer,
   globalShortcut,
   ipcMain,
   screen
@@ -36,6 +37,7 @@ function getSmokeDescriptor() {
   return {
     key: 'smoke',
     bounds: { x: 80, y: 80, width: 1280, height: 720 },
+    displayId: null,
     controls: true,
     preview: true
   };
@@ -49,6 +51,7 @@ function getDisplayDescriptors() {
   const primaryDisplay = screen.getPrimaryDisplay();
   return screen.getAllDisplays().map((display) => ({
     key: `display-${display.id}`,
+    displayId: String(display.id),
     bounds: display.bounds,
     controls: display.id === primaryDisplay.id,
     preview: false
@@ -279,6 +282,18 @@ async function runSmoke() {
     const normalState = await executeInRenderer('window.focusVeilSmoke.getState()');
     assertSmoke(assertions, 'normal mode hides controls', !normalState.controlsVisible, normalState);
 
+    const motionState = await executeInRenderer('window.focusVeilSmoke.simulateMotion(260, 190, 0.85)');
+    await sleep(450);
+    screenshots.push(await captureSmoke('motion-focus'));
+    assertSmoke(
+      assertions,
+      'motion focus accepts moving target',
+      motionState.motionStrength > 0.5 &&
+        Math.abs(motionState.motionTargetX - 260) < 2 &&
+        Math.abs(motionState.motionTargetY - 190) < 2,
+      motionState
+    );
+
     const operationState = await executeInRenderer('window.focusVeilSmoke.setOperationMode(true)');
     await sleep(300);
     screenshots.push(await captureSmoke('operation'));
@@ -404,6 +419,7 @@ function buildWindowOptions(descriptor) {
 function createOverlayWindow(descriptor) {
   const win = new BrowserWindow(buildWindowOptions(descriptor));
   win.focusVeilKey = descriptor.key;
+  win.focusVeilDisplayId = descriptor.displayId;
   win.focusVeilControls = descriptor.controls;
 
   overlayWindows.set(descriptor.key, win);
@@ -415,6 +431,7 @@ function createOverlayWindow(descriptor) {
   win.setMenuBarVisibility(false);
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setIgnoreMouseEvents(true, { forward: true });
+  win.setContentProtection(true);
 
   try {
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -427,7 +444,8 @@ function createOverlayWindow(descriptor) {
       smoke: isSmoke ? '1' : '0',
       preview: descriptor.preview ? '1' : '0',
       controls: descriptor.controls ? '1' : '0',
-      display: descriptor.key
+      display: descriptor.key,
+      motion: '1'
     }
   });
 
@@ -531,6 +549,30 @@ ipcMain.handle('focus-veil:get-main-state', () => ({
 }));
 
 ipcMain.handle('focus-veil:timer-command', (_event, action) => handleTimerCommand(action));
+
+ipcMain.handle('focus-veil:get-capture-source', async (event) => {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const displayId = senderWindow?.focusVeilDisplayId;
+  const sources = await desktopCapturer.getSources({
+    types: ['screen'],
+    thumbnailSize: { width: 0, height: 0 }
+  });
+
+  const source =
+    sources.find((candidate) => candidate.display_id === displayId) ??
+    sources.find((candidate) => candidate.display_id) ??
+    sources[0];
+
+  if (!source) {
+    return null;
+  }
+
+  return {
+    id: source.id,
+    name: source.name,
+    displayId: source.display_id
+  };
+});
 
 app.whenReady().then(() => {
   createOverlayWindows();

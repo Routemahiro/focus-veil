@@ -28,6 +28,7 @@
 | `npm run smoke` | 成功 | レポート: `artifacts/smoke-report.json` |
 | `npm start` | 成功 | `FOCUS_VEIL_READY` を確認し、起動後にプロセス停止 |
 | `npm start` after multi-display change | 成功 | 2画面環境で `FOCUS_VEIL_READY display-660969500` と `display-3853833632` を確認 |
+| `npm start` after motion focus change | 成功 | 2画面環境でREADY 2件、Electron 5プロセス、stderr 0 bytes |
 
 ### 問題、修正、再確認
 
@@ -38,6 +39,7 @@
 | メモリ採取用PowerShellが起動中ログを読んで失敗 | アプリ本体ではなく検証コマンドの問題 | プロセス停止後にログを読む形へ変更 | 再実行でメモリ概算取得、残プロセスなし |
 | 単一巨大ウィンドウでは片側モニターだけに見えるケース | マルチディスプレイで全体に効果が出ない | ディスプレイごとにoverlay BrowserWindowを作成し、タイマー状態をメインプロセスで同期 | 2画面環境でREADYログ2件を確認 |
 | 水面の雰囲気が弱い | エフェクト感が薄い | 低密度ラインに加えて散発的な薄い波紋を追加 | smokeスクショで通知時の波紋と非ブランクを確認 |
+| 人が注目している場所を明るくしたい | マウス追従だけだとキーボード操作や画面変化に追従しづらい | 低解像度screen captureの差分重心を使うmotion focusを追加。失敗時はマウスへフォールバック | smokeで `motionStatus: active` と疑似motion targetを確認 |
 
 ### smoke確認
 
@@ -53,18 +55,22 @@
 | 4秒作業タイマー到達で休憩へ遷移 | OK |
 | 通知演出カウントが増える | OK |
 | 通常時スクリーンショットが非ブランク | OK |
+| motion focus疑似ターゲットが受け付けられる | OK |
+| motion focusスクリーンショットが非ブランク | OK |
 | 操作時スクリーンショットが非ブランク | OK |
 | 通知演出スクリーンショットが非ブランク | OK |
 
 スクリーンショット:
 
 - `artifacts/screenshots/normal.png`
+- `artifacts/screenshots/motion-focus.png`
 - `artifacts/screenshots/operation.png`
 - `artifacts/screenshots/notification.png`
 
 目視確認:
 
 - 通常時は右下に時間だけが表示された。
+- motion focusの疑似ターゲットでスポットライトが移動した。
 - 操作時はStart/Pause/Resetが表示され、ボタン文字のはみ出しは見当たらなかった。
 - 通知演出中は白飛びや強いフラッシュではなく、暗幕が少し開く程度だった。
 - 通知演出中に薄い波紋が表示された。
@@ -88,6 +94,13 @@
 - Electronプロセス数は5。main/gpu/utilityに加え、displayごとのrendererが2つ作られる構成になった。
 - 起動後の残プロセスなし。
 
+Motion focus変更後の通常起動確認:
+
+- `npm start` で `FOCUS_VEIL_READY display-3853833632` と `FOCUS_VEIL_READY display-660969500` を確認。
+- Electronプロセス数は5。
+- stderr 0 bytes。
+- 起動後の残プロセスなし。
+
 内訳:
 
 - main: 91.9 MB / CPU 0.33s
@@ -106,6 +119,7 @@
 | Ctrl単体 | フォーカス中のみベストエフォート。通常時の安定経路にはしない |
 | ポモドーロ | 作業25分/休憩5分、smokeでは4秒/2秒 |
 | 通知演出 | 1.6秒、暗幕alphaとライト半径のみ変化 |
+| Motion focus | `desktopCapturer` + `getUserMedia` でscreenを低解像度取得し、差分重心でスポットライトを移動 |
 | 除外項目 | 音声、BGM、複数テーマ、トレイ、インストーラー、複雑な設定保存は未実装 |
 
 ### 未確認範囲
@@ -113,5 +127,7 @@
 - 実作業アプリに対して、通常時クリックがOSレベルで常に背面へ届くかの長時間手動確認。
 - マルチモニターの基本作成はREADYログで確認済み。負座標モニター、DPI混在環境での表示範囲とマウス追従は未確認。
 - Windows仮想デスクトップ切り替え時の完全自動追従。不可視時の再作成と `Ctrl+Shift+R` 復帰は実装したが、仮想デスクトップ実操作での確認は未実施。
+- Motion focusの実作業評価。動画、広告、スクロール、カーソル点滅、コード編集などへの反応は未調整。
+- 画面キャプチャが制限されるアプリや保護コンテンツでのフォールバック挙動。
 - 25分/5分の実時間到達。v0.1では短時間テストモードで通知演出を確認。
 - 長時間常駐時のCPU/GPU推移とバッテリー影響。

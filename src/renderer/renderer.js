@@ -10,6 +10,7 @@ const query = new URLSearchParams(window.location.search);
 const isSmoke = query.get('smoke') === '1';
 const isPreview = query.get('preview') === '1';
 const hasControls = query.get('controls') !== '0';
+const motionFocusEnabled = query.get('motion') !== '0';
 const durations = {
   work: isSmoke ? 4 : 25 * 60,
   break: isSmoke ? 2 : 5 * 60
@@ -20,6 +21,13 @@ const state = {
   controlHoldMode: false,
   mouseX: window.innerWidth / 2,
   mouseY: window.innerHeight / 2,
+  focusX: window.innerWidth / 2,
+  focusY: window.innerHeight / 2,
+  motionTargetX: window.innerWidth / 2,
+  motionTargetY: window.innerHeight / 2,
+  motionActiveUntil: 0,
+  motionStrength: 0,
+  motionStatus: motionFocusEnabled ? 'starting' : 'disabled',
   phase: 'work',
   running: false,
   remaining: durations.work,
@@ -29,6 +37,29 @@ const state = {
   nextRippleAt: performance.now() + 1800 + Math.random() * 1800,
   ripples: []
 };
+
+const motionCapture = {
+  enabled: motionFocusEnabled,
+  available: false,
+  stream: null,
+  video: null,
+  canvas: document.createElement('canvas'),
+  context: null,
+  previousFrame: null,
+  lastSample: 0,
+  sampleWidth: 96,
+  sampleHeight: 54
+};
+
+motionCapture.canvas.width = motionCapture.sampleWidth;
+motionCapture.canvas.height = motionCapture.sampleHeight;
+motionCapture.context = motionCapture.canvas.getContext('2d', {
+  willReadFrequently: true
+});
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
 
 function resizeCanvas() {
   const scale = window.devicePixelRatio || 1;
@@ -45,6 +76,23 @@ function resizeCanvas() {
 function setOperationMode(enabled) {
   state.operationMode = enabled;
   body.classList.toggle('operation-mode', enabled);
+}
+
+function getFocusPoint(now) {
+  const motionActive = now < state.motionActiveUntil && state.motionStrength > 0.04;
+  const targetX = motionActive ? state.motionTargetX : state.mouseX;
+  const targetY = motionActive ? state.motionTargetY : state.mouseY;
+  const follow = motionActive ? 0.18 : 0.11;
+
+  state.focusX += (targetX - state.focusX) * follow;
+  state.focusY += (targetY - state.focusY) * follow;
+  state.motionStrength *= motionActive ? 0.965 : 0.88;
+
+  return {
+    x: state.focusX,
+    y: state.focusY,
+    motionStrength: motionActive ? state.motionStrength : 0
+  };
 }
 
 function getNotificationPulse(now) {
@@ -147,8 +195,10 @@ function drawVeil(now = performance.now()) {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const pulse = getNotificationPulse(now);
+  const focus = getFocusPoint(now);
   const veilAlpha = 0.14 - pulse * 0.055;
-  const radius = (state.operationMode ? 280 : 230) + pulse * 90;
+  const radius =
+    (state.operationMode ? 280 : 230) + pulse * 90 + focus.motionStrength * 48;
 
   context.clearRect(0, 0, width, height);
 
@@ -156,15 +206,15 @@ function drawVeil(now = performance.now()) {
   context.fillRect(0, 0, width, height);
 
   const gradient = context.createRadialGradient(
-    state.mouseX,
-    state.mouseY,
+    focus.x,
+    focus.y,
     20,
-    state.mouseX,
-    state.mouseY,
+    focus.x,
+    focus.y,
     radius
   );
-  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.54)');
-  gradient.addColorStop(0.56, 'rgba(0, 0, 0, 0.26)');
+  gradient.addColorStop(0, `rgba(0, 0, 0, ${(0.56 + focus.motionStrength * 0.12).toFixed(3)})`);
+  gradient.addColorStop(0.56, 'rgba(0, 0, 0, 0.27)');
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
   context.globalCompositeOperation = 'destination-out';
@@ -175,19 +225,22 @@ function drawVeil(now = performance.now()) {
   context.globalCompositeOperation = 'source-over';
 
   const glow = context.createRadialGradient(
-    state.mouseX,
-    state.mouseY,
+    focus.x,
+    focus.y,
     0,
-    state.mouseX,
-    state.mouseY,
+    focus.x,
+    focus.y,
     radius * 0.82
   );
-  glow.addColorStop(0, `rgba(226, 248, 241, ${(0.05 + pulse * 0.035).toFixed(3)})`);
+  glow.addColorStop(
+    0,
+    `rgba(226, 248, 241, ${(0.05 + pulse * 0.035 + focus.motionStrength * 0.035).toFixed(3)})`
+  );
   glow.addColorStop(0.6, 'rgba(186, 226, 216, 0.018)');
   glow.addColorStop(1, 'rgba(186, 226, 216, 0)');
   context.fillStyle = glow;
   context.beginPath();
-  context.arc(state.mouseX, state.mouseY, radius * 0.82, 0, Math.PI * 2);
+  context.arc(focus.x, focus.y, radius * 0.82, 0, Math.PI * 2);
   context.fill();
 
   drawRippleField(width, height, now, pulse);
@@ -196,6 +249,8 @@ function drawVeil(now = performance.now()) {
 let lastDraw = 0;
 
 function animationLoop(now) {
+  sampleMotionFocus(now);
+
   if (now - lastDraw >= 32) {
     drawVeil(now);
     lastDraw = now;
@@ -221,7 +276,7 @@ function updateTimerUi() {
 function triggerNotification() {
   state.notificationUntil = performance.now() + 1600;
   const now = performance.now();
-  addRipple(now, state.mouseX, state.mouseY, 1.15);
+  addRipple(now, state.focusX, state.focusY, 1.15);
 }
 
 function applyTimerState(timerState) {
@@ -245,6 +300,12 @@ function applyTimerState(timerState) {
 function getPublicState() {
   return {
     operationMode: state.operationMode,
+    motionStatus: state.motionStatus,
+    motionStrength: Number(state.motionStrength.toFixed(3)),
+    motionTargetX: Number(state.motionTargetX.toFixed(1)),
+    motionTargetY: Number(state.motionTargetY.toFixed(1)),
+    focusX: Number(state.focusX.toFixed(1)),
+    focusY: Number(state.focusY.toFixed(1)),
     phase: state.phase,
     running: state.running,
     remaining: Number(state.remaining.toFixed(2)),
@@ -252,6 +313,137 @@ function getPublicState() {
     notificationCount: state.notificationCount,
     controlsVisible: hasControls && getComputedStyle(timerControls).display !== 'none'
   };
+}
+
+function updateMotionTarget(x, y, confidence, now = performance.now()) {
+  state.motionTargetX = clamp(x, 0, window.innerWidth);
+  state.motionTargetY = clamp(y, 0, window.innerHeight);
+  state.motionStrength = Math.max(state.motionStrength, clamp(confidence, 0, 1));
+  state.motionActiveUntil = now + 1400 + clamp(confidence, 0, 1) * 900;
+}
+
+function sampleMotionFocus(now) {
+  if (!motionCapture.available || !motionCapture.video || now - motionCapture.lastSample < 160) {
+    return;
+  }
+
+  if (motionCapture.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    return;
+  }
+
+  motionCapture.lastSample = now;
+  const sampleWidth = motionCapture.sampleWidth;
+  const sampleHeight = motionCapture.sampleHeight;
+  const sampleContext = motionCapture.context;
+  sampleContext.drawImage(motionCapture.video, 0, 0, sampleWidth, sampleHeight);
+
+  const frame = sampleContext.getImageData(0, 0, sampleWidth, sampleHeight);
+  const current = frame.data;
+
+  if (!motionCapture.previousFrame) {
+    motionCapture.previousFrame = new Uint8ClampedArray(current);
+    return;
+  }
+
+  const previous = motionCapture.previousFrame;
+  let totalWeight = 0;
+  let weightedX = 0;
+  let weightedY = 0;
+  let activePixels = 0;
+
+  for (let y = 0; y < sampleHeight; y += 1) {
+    for (let x = 0; x < sampleWidth; x += 1) {
+      const offset = (y * sampleWidth + x) * 4;
+      const previousLuma =
+        previous[offset] * 0.299 + previous[offset + 1] * 0.587 + previous[offset + 2] * 0.114;
+      const currentLuma =
+        current[offset] * 0.299 + current[offset + 1] * 0.587 + current[offset + 2] * 0.114;
+      const diff = Math.abs(currentLuma - previousLuma);
+
+      if (diff <= 14) {
+        continue;
+      }
+
+      const weight = diff - 14;
+      totalWeight += weight;
+      weightedX += x * weight;
+      weightedY += y * weight;
+      activePixels += 1;
+    }
+  }
+
+  motionCapture.previousFrame.set(current);
+
+  const activeRatio = activePixels / (sampleWidth * sampleHeight);
+  const broadMotionPenalty = activeRatio > 0.2 ? clamp(1 - (activeRatio - 0.2) / 0.24, 0, 1) : 1;
+  const confidence = clamp((totalWeight - 900) / 16000, 0, 1) * broadMotionPenalty;
+
+  if (confidence <= 0.045 || totalWeight <= 0) {
+    return;
+  }
+
+  updateMotionTarget(
+    (weightedX / totalWeight / sampleWidth) * window.innerWidth,
+    (weightedY / totalWeight / sampleHeight) * window.innerHeight,
+    confidence,
+    now
+  );
+}
+
+function stopMotionCapture() {
+  if (!motionCapture.stream) {
+    return;
+  }
+
+  for (const track of motionCapture.stream.getTracks()) {
+    track.stop();
+  }
+
+  motionCapture.stream = null;
+  motionCapture.available = false;
+}
+
+async function startMotionCapture() {
+  if (!motionCapture.enabled || !navigator.mediaDevices?.getUserMedia) {
+    state.motionStatus = motionCapture.enabled ? 'unavailable' : 'disabled';
+    return;
+  }
+
+  try {
+    const source = await window.focusVeil?.getCaptureSource();
+    if (!source?.id) {
+      state.motionStatus = 'unavailable';
+      return;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        mandatory: {
+          chromeMediaSource: 'desktop',
+          chromeMediaSourceId: source.id,
+          maxWidth: 480,
+          maxHeight: 270,
+          maxFrameRate: 8
+        }
+      }
+    });
+
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+    await video.play();
+
+    motionCapture.stream = stream;
+    motionCapture.video = video;
+    motionCapture.available = true;
+    state.motionStatus = 'active';
+  } catch (error) {
+    console.warn('Focus Veil: motion focus capture unavailable.', error);
+    stopMotionCapture();
+    state.motionStatus = 'fallback';
+  }
 }
 
 timerControls.addEventListener('click', async (event) => {
@@ -321,6 +513,10 @@ if (isSmoke) {
       state.mouseY = y;
       return getPublicState();
     },
+    simulateMotion(x, y, strength = 0.8) {
+      updateMotionTarget(x, y, strength);
+      return getPublicState();
+    },
     async setOperationMode(enabled) {
       setOperationMode(Boolean(enabled));
       await window.focusVeil?.setOperationMode(Boolean(enabled));
@@ -335,4 +531,5 @@ if (isSmoke) {
 
 resizeCanvas();
 updateTimerUi();
+startMotionCapture();
 requestAnimationFrame(animationLoop);
