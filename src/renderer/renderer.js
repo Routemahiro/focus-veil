@@ -47,8 +47,8 @@ const motionCapture = {
   context: null,
   previousFrame: null,
   lastSample: 0,
-  sampleWidth: 96,
-  sampleHeight: 54
+  sampleWidth: 128,
+  sampleHeight: 72
 };
 
 motionCapture.canvas.width = motionCapture.sampleWidth;
@@ -79,7 +79,7 @@ function setOperationMode(enabled) {
 }
 
 function getFocusPoint(now) {
-  const motionActive = now < state.motionActiveUntil && state.motionStrength > 0.04;
+  const motionActive = now < state.motionActiveUntil && state.motionStrength > 0.025;
   const targetX = motionActive ? state.motionTargetX : state.mouseX;
   const targetY = motionActive ? state.motionTargetY : state.mouseY;
   const follow = motionActive ? 0.18 : 0.11;
@@ -198,7 +198,7 @@ function drawVeil(now = performance.now()) {
   const focus = getFocusPoint(now);
   const veilAlpha = 0.14 - pulse * 0.055;
   const radius =
-    (state.operationMode ? 280 : 230) + pulse * 90 + focus.motionStrength * 48;
+    (state.operationMode ? 260 : 215) + pulse * 90 + focus.motionStrength * 42;
 
   context.clearRect(0, 0, width, height);
 
@@ -213,14 +213,14 @@ function drawVeil(now = performance.now()) {
     focus.y,
     radius
   );
-  gradient.addColorStop(0, `rgba(0, 0, 0, ${(0.56 + focus.motionStrength * 0.12).toFixed(3)})`);
-  gradient.addColorStop(0.56, 'rgba(0, 0, 0, 0.27)');
+  gradient.addColorStop(0, `rgba(0, 0, 0, ${(0.5 + focus.motionStrength * 0.1).toFixed(3)})`);
+  gradient.addColorStop(0.56, 'rgba(0, 0, 0, 0.23)');
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
   context.globalCompositeOperation = 'destination-out';
   context.fillStyle = gradient;
   context.beginPath();
-  context.arc(state.mouseX, state.mouseY, radius, 0, Math.PI * 2);
+  context.arc(focus.x, focus.y, radius, 0, Math.PI * 2);
   context.fill();
   context.globalCompositeOperation = 'source-over';
 
@@ -234,7 +234,7 @@ function drawVeil(now = performance.now()) {
   );
   glow.addColorStop(
     0,
-    `rgba(226, 248, 241, ${(0.05 + pulse * 0.035 + focus.motionStrength * 0.035).toFixed(3)})`
+    `rgba(226, 248, 241, ${(0.036 + pulse * 0.03 + focus.motionStrength * 0.05).toFixed(3)})`
   );
   glow.addColorStop(0.6, 'rgba(186, 226, 216, 0.018)');
   glow.addColorStop(1, 'rgba(186, 226, 216, 0)');
@@ -360,11 +360,11 @@ function sampleMotionFocus(now) {
         current[offset] * 0.299 + current[offset + 1] * 0.587 + current[offset + 2] * 0.114;
       const diff = Math.abs(currentLuma - previousLuma);
 
-      if (diff <= 14) {
+      if (diff <= 8) {
         continue;
       }
 
-      const weight = diff - 14;
+      const weight = diff - 8;
       totalWeight += weight;
       weightedX += x * weight;
       weightedY += y * weight;
@@ -375,10 +375,10 @@ function sampleMotionFocus(now) {
   motionCapture.previousFrame.set(current);
 
   const activeRatio = activePixels / (sampleWidth * sampleHeight);
-  const broadMotionPenalty = activeRatio > 0.2 ? clamp(1 - (activeRatio - 0.2) / 0.24, 0, 1) : 1;
-  const confidence = clamp((totalWeight - 900) / 16000, 0, 1) * broadMotionPenalty;
+  const broadMotionPenalty = activeRatio > 0.34 ? clamp(1 - (activeRatio - 0.34) / 0.28, 0, 1) : 1;
+  const confidence = clamp((totalWeight - 260) / 8500, 0, 1) * broadMotionPenalty;
 
-  if (confidence <= 0.045 || totalWeight <= 0) {
+  if (confidence <= 0.025 || totalWeight <= 0) {
     return;
   }
 
@@ -422,9 +422,9 @@ async function startMotionCapture() {
         mandatory: {
           chromeMediaSource: 'desktop',
           chromeMediaSourceId: source.id,
-          maxWidth: 480,
-          maxHeight: 270,
-          maxFrameRate: 8
+          maxWidth: 640,
+          maxHeight: 360,
+          maxFrameRate: 10
         }
       }
     });

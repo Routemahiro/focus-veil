@@ -285,6 +285,7 @@ async function runSmoke() {
     const motionState = await executeInRenderer('window.focusVeilSmoke.simulateMotion(260, 190, 0.85)');
     await sleep(450);
     screenshots.push(await captureSmoke('motion-focus'));
+    const focusedMotionState = await executeInRenderer('window.focusVeilSmoke.getState()');
     assertSmoke(
       assertions,
       'motion focus accepts moving target',
@@ -292,6 +293,13 @@ async function runSmoke() {
         Math.abs(motionState.motionTargetX - 260) < 2 &&
         Math.abs(motionState.motionTargetY - 190) < 2,
       motionState
+    );
+    assertSmoke(
+      assertions,
+      'motion focus moves spotlight toward target',
+      Math.abs(focusedMotionState.focusX - 260) < 80 &&
+        Math.abs(focusedMotionState.focusY - 190) < 60,
+      focusedMotionState
     );
 
     const operationState = await executeInRenderer('window.focusVeilSmoke.setOperationMode(true)');

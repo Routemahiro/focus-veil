@@ -40,6 +40,7 @@
 | 単一巨大ウィンドウでは片側モニターだけに見えるケース | マルチディスプレイで全体に効果が出ない | ディスプレイごとにoverlay BrowserWindowを作成し、タイマー状態をメインプロセスで同期 | 2画面環境でREADYログ2件を確認 |
 | 水面の雰囲気が弱い | エフェクト感が薄い | 低密度ラインに加えて散発的な薄い波紋を追加 | smokeスクショで通知時の波紋と非ブランクを確認 |
 | 人が注目している場所を明るくしたい | マウス追従だけだとキーボード操作や画面変化に追従しづらい | 低解像度screen captureの差分重心を使うmotion focusを追加。失敗時はマウスへフォールバック | smokeで `motionStatus: active` と疑似motion targetを確認 |
+| motion focus後もマウス周辺の円が強く、離れた動きへ光が移らない | motion targetは計算されても暗幕の抜きがマウス位置に残り、motion側は薄いglowだけになる | `destination-out` の円もfocus位置へ変更。マウス時の抜きを弱め、差分しきい値を下げ、サンプルを128x72/10fpsへ調整 | smokeでfocusが疑似target近くへ移動するassertionを追加し成功 |
 
 ### smoke確認
 
@@ -56,6 +57,7 @@
 | 通知演出カウントが増える | OK |
 | 通常時スクリーンショットが非ブランク | OK |
 | motion focus疑似ターゲットが受け付けられる | OK |
+| motion focusが疑似ターゲットへスポットライトを移動する | OK |
 | motion focusスクリーンショットが非ブランク | OK |
 | 操作時スクリーンショットが非ブランク | OK |
 | 通知演出スクリーンショットが非ブランク | OK |
@@ -97,6 +99,13 @@
 Motion focus変更後の通常起動確認:
 
 - `npm start` で `FOCUS_VEIL_READY display-3853833632` と `FOCUS_VEIL_READY display-660969500` を確認。
+- Electronプロセス数は5。
+- stderr 0 bytes。
+- 起動後の残プロセスなし。
+
+Motion focus調整後の通常起動確認:
+
+- `npm start` で `FOCUS_VEIL_READY display-660969500` と `FOCUS_VEIL_READY display-3853833632` を確認。
 - Electronプロセス数は5。
 - stderr 0 bytes。
 - 起動後の残プロセスなし。
