@@ -9,7 +9,7 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 - Electronのメインプロセスで透明・フレームレス・常時前面のBrowserWindowをディスプレイごとに作成します。
 - レンダラーは素のHTML/CSS/JavaScript/Canvasで構成し、React等の重いUIフレームワークは入れていません。
 - 通常時はクリック透過を有効化し、操作モード中だけクリック可能にします。
-- Motion focusは、各ディスプレイのscreen captureを低解像度で読み、前フレームとの差分から動きの重心を推定してスポットライトを寄せます。
+- Motion highlightは、各ディスプレイのscreen captureを低解像度で読み、前フレームとの差分から動きのある領域を推定して薄いハイライトを足します。メインスポットはマウス周辺に残します。
 - Ctrl単体の通常時操作は、非フォーカス/クリック透過との相性が悪いため安定要件から外し、`Ctrl+Shift+F` を安定操作として採用しました。
 - 通知は音・点滅・強いフラッシュを使わず、暗幕の透明度とフォーカス半径を1.6秒だけ緩く変化させます。
 
@@ -20,7 +20,7 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 | UI構成 | 素のHTML/CSS/JS | React/Vue等 | 画面端の小UIとCanvasだけなので、起動・依存・認知負荷を増やさないため |
 | 操作切替 | `Ctrl+Shift+F` | Ctrl単体グローバル検知 | ElectronのglobalShortcutはアクセラレータ登録向けで、非フォーカス透明ウィンドウがCtrl押下/解除を安定取得する設計ではないため |
 | クリック透過 | `setIgnoreMouseEvents(true, { forward: true })` | 常時クリック可能 | 背面作業を邪魔しないことを最優先にするため |
-| 注目位置 | motion focus + マウスフォールバック | Webカメラ視線推定 | 視線推定は精度、権限、負荷、プライバシーのコストが大きいため |
+| 注目補助 | motion highlight + マウススポット | Webカメラ視線推定 | 視線推定は精度、権限、負荷、プライバシーのコストが大きいため |
 | 水面 | 低密度の揺らぎと散発的な波紋 | 粒子、波紋大量描画、WebGL | 注意を奪わず、CPU/GPU負荷を抑えるため |
 | 通知 | 暗幕がふわっと開く | 点滅、白フラッシュ、音 | 集中を強く断ち切らないため |
 
@@ -36,7 +36,7 @@ BrowserWindowは `transparent: true`、`frame: false`、`skipTaskbar: true`、`f
 
 タイマー状態はメインプロセスで一元管理し、全overlay windowへIPCで同期します。これにより、複数ディスプレイでも残り時間と通知演出がずれません。操作UIはprimary displayのoverlayだけに表示し、他のdisplayは操作モード中もクリック透過を維持します。
 
-Motion focus用のscreen sourceもメインプロセスで `desktopCapturer.getSources({ types: ['screen'] })` から取得し、display idが一致するsource idだけをrendererへ返します。rendererは `getUserMedia` でそのscreenを低解像度/低FPSで読みます。overlay自身の写り込みを避けるため、各BrowserWindowには `setContentProtection(true)` を指定しています。
+Motion highlight用のscreen sourceもメインプロセスで `desktopCapturer.getSources({ types: ['screen'] })` から取得し、display idが一致するsource idだけをrendererへ返します。rendererは `getUserMedia` でそのscreenを低解像度/低FPSで読みます。overlay自身の写り込みを避けるため、各BrowserWindowには `setContentProtection(true)` を指定しています。
 
 ### 透明オーバーレイとクリック透過
 
@@ -79,24 +79,24 @@ Windows仮想デスクトップはElectron標準APIだけで「全デスクト�
 - 描画は `requestAnimationFrame` 内で約30fpsに制限しています。
 - 水面は低密度の線描画だけで、WebGL、粒子、大量DOMを使っていません。
 - タイマー更新は100ms間隔ですが、表示は秒単位で、処理は単純な減算だけです。
-- Motion focusは各ディスプレイ128x72pxのサンプルに縮小し、最大10fpsで差分を見るだけです。大きすぎる全体変化はconfidenceを下げ、動画やスクロールに引っ張られすぎないようにしています。
+- Motion highlightは各ディスプレイ128x72pxのサンプルに縮小し、最大10fpsで差分を見るだけです。大きすぎる全体変化はconfidenceを下げ、動画やスクロールに引っ張られすぎないようにしています。
 
 ### 水面とフォーカスライト
 
-暗幕は黒14%を基準に全面へ描画します。その後、フォーカス位置に半径230px前後のradial gradientを `destination-out` で抜き、背面を柔らかく見せます。フォーカス位置はmotion confidenceが高い時は動きの重心、低い時はマウス位置です。操作モードでは半径を280pxにしてUI操作時の視認性を少し上げます。
+暗幕は黒14%を基準に全面へ描画します。その後、マウス周辺に半径215px前後のradial gradientを `destination-out` で抜き、背面を柔らかく見せます。動きがある領域には別レイヤーで薄いglowを足します。メインの明るい円はmotion側へ移動させません。
 
 水面は低アルファの緑青系ラインと、数秒おきに広がる薄い波紋で表現しています。波紋は最大6個までに制限し、描画負荷と視覚的な主張を抑えています。単色テーマに寄りすぎず、背面作業の可読性を損なわない範囲にしています。
 
-### Motion focus
+### Motion highlight
 
-Motion focusは、ユーザーの視線そのものではなく「画面内で変化していて、人が注意を向けやすい場所」を近似します。処理は次の流れです。
+Motion highlightは、ユーザーの視線そのものではなく「画面内で変化していて、人が注意を向けやすい場所」を補助的に浮かせます。処理は次の流れです。
 
 1. ディスプレイごとのscreen capture sourceを取得する。
 2. rendererで128x72pxへ縮小して前フレームとの差分を取る。
-3. 差分が十分あるピクセルの重心を求める。
+3. 差分が十分あるピクセルを8x6のセルに集計する。
 4. 全体変化が大きすぎる場合はconfidenceを下げる。
-5. confidenceが高い間だけスポットライトを滑らかに移動する。
-6. 取得失敗時、低confidence時、動きが止まった後はマウス追従へ戻る。
+5. 強いセルを最大5個まで薄いハイライトとして保持する。
+6. 取得失敗時、低confidence時、動きが止まった後はハイライトだけ消える。マウススポットは維持する。
 
 この方式は入力キャレット位置の取得よりアプリ横断性が高く、Webカメラ視線推定より軽い一方で、動画・広告・ローディングなどにも反応します。そのためv0.1では実験機能として扱い、しきい値は実作業で調整する前提です。
 

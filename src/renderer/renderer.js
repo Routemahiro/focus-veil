@@ -21,12 +21,7 @@ const state = {
   controlHoldMode: false,
   mouseX: window.innerWidth / 2,
   mouseY: window.innerHeight / 2,
-  focusX: window.innerWidth / 2,
-  focusY: window.innerHeight / 2,
-  motionTargetX: window.innerWidth / 2,
-  motionTargetY: window.innerHeight / 2,
-  motionActiveUntil: 0,
-  motionStrength: 0,
+  motionHighlights: [],
   motionStatus: motionFocusEnabled ? 'starting' : 'disabled',
   phase: 'work',
   running: false,
@@ -76,23 +71,6 @@ function resizeCanvas() {
 function setOperationMode(enabled) {
   state.operationMode = enabled;
   body.classList.toggle('operation-mode', enabled);
-}
-
-function getFocusPoint(now) {
-  const motionActive = now < state.motionActiveUntil && state.motionStrength > 0.025;
-  const targetX = motionActive ? state.motionTargetX : state.mouseX;
-  const targetY = motionActive ? state.motionTargetY : state.mouseY;
-  const follow = motionActive ? 0.18 : 0.11;
-
-  state.focusX += (targetX - state.focusX) * follow;
-  state.focusY += (targetY - state.focusY) * follow;
-  state.motionStrength *= motionActive ? 0.965 : 0.88;
-
-  return {
-    x: state.focusX,
-    y: state.focusY,
-    motionStrength: motionActive ? state.motionStrength : 0
-  };
 }
 
 function getNotificationPulse(now) {
@@ -191,14 +169,51 @@ function drawRippleField(width, height, now, pulse) {
   context.restore();
 }
 
+function drawMotionHighlights(now) {
+  state.motionHighlights = state.motionHighlights.filter((highlight) => {
+    const age = now - highlight.updatedAt;
+    highlight.strength *= age > 700 ? 0.9 : 0.965;
+    return age < 2200 && highlight.strength > 0.035;
+  });
+
+  if (state.motionHighlights.length === 0) {
+    return;
+  }
+
+  context.save();
+  context.globalCompositeOperation = 'source-over';
+
+  for (const highlight of state.motionHighlights) {
+    const age = now - highlight.updatedAt;
+    const alpha = clamp(highlight.strength * (1 - age / 2600), 0, 1);
+    const radius = 130 + highlight.strength * 95;
+    const glow = context.createRadialGradient(
+      highlight.x,
+      highlight.y,
+      0,
+      highlight.x,
+      highlight.y,
+      radius
+    );
+    glow.addColorStop(0, `rgba(223, 250, 241, ${(alpha * 0.055).toFixed(3)})`);
+    glow.addColorStop(0.48, `rgba(184, 225, 216, ${(alpha * 0.03).toFixed(3)})`);
+    glow.addColorStop(1, 'rgba(184, 225, 216, 0)');
+
+    context.fillStyle = glow;
+    context.beginPath();
+    context.arc(highlight.x, highlight.y, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  context.restore();
+}
+
 function drawVeil(now = performance.now()) {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const pulse = getNotificationPulse(now);
-  const focus = getFocusPoint(now);
   const veilAlpha = 0.14 - pulse * 0.055;
-  const radius =
-    (state.operationMode ? 260 : 215) + pulse * 90 + focus.motionStrength * 42;
+  const radius = (state.operationMode ? 260 : 215) + pulse * 90;
 
   context.clearRect(0, 0, width, height);
 
@@ -206,43 +221,44 @@ function drawVeil(now = performance.now()) {
   context.fillRect(0, 0, width, height);
 
   const gradient = context.createRadialGradient(
-    focus.x,
-    focus.y,
+    state.mouseX,
+    state.mouseY,
     20,
-    focus.x,
-    focus.y,
+    state.mouseX,
+    state.mouseY,
     radius
   );
-  gradient.addColorStop(0, `rgba(0, 0, 0, ${(0.5 + focus.motionStrength * 0.1).toFixed(3)})`);
+  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.48)');
   gradient.addColorStop(0.56, 'rgba(0, 0, 0, 0.23)');
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
   context.globalCompositeOperation = 'destination-out';
   context.fillStyle = gradient;
   context.beginPath();
-  context.arc(focus.x, focus.y, radius, 0, Math.PI * 2);
+  context.arc(state.mouseX, state.mouseY, radius, 0, Math.PI * 2);
   context.fill();
   context.globalCompositeOperation = 'source-over';
 
   const glow = context.createRadialGradient(
-    focus.x,
-    focus.y,
+    state.mouseX,
+    state.mouseY,
     0,
-    focus.x,
-    focus.y,
+    state.mouseX,
+    state.mouseY,
     radius * 0.82
   );
   glow.addColorStop(
     0,
-    `rgba(226, 248, 241, ${(0.036 + pulse * 0.03 + focus.motionStrength * 0.05).toFixed(3)})`
+    `rgba(226, 248, 241, ${(0.03 + pulse * 0.03).toFixed(3)})`
   );
   glow.addColorStop(0.6, 'rgba(186, 226, 216, 0.018)');
   glow.addColorStop(1, 'rgba(186, 226, 216, 0)');
   context.fillStyle = glow;
   context.beginPath();
-  context.arc(focus.x, focus.y, radius * 0.82, 0, Math.PI * 2);
+  context.arc(state.mouseX, state.mouseY, radius * 0.82, 0, Math.PI * 2);
   context.fill();
 
+  drawMotionHighlights(now);
   drawRippleField(width, height, now, pulse);
 }
 
@@ -276,7 +292,7 @@ function updateTimerUi() {
 function triggerNotification() {
   state.notificationUntil = performance.now() + 1600;
   const now = performance.now();
-  addRipple(now, state.focusX, state.focusY, 1.15);
+  addRipple(now, state.mouseX, state.mouseY, 1.15);
 }
 
 function applyTimerState(timerState) {
@@ -298,14 +314,20 @@ function applyTimerState(timerState) {
 }
 
 function getPublicState() {
+  const strongestHighlight = state.motionHighlights.reduce(
+    (strongest, highlight) => (highlight.strength > strongest.strength ? highlight : strongest),
+    { x: 0, y: 0, strength: 0 }
+  );
+
   return {
     operationMode: state.operationMode,
+    mouseX: Number(state.mouseX.toFixed(1)),
+    mouseY: Number(state.mouseY.toFixed(1)),
     motionStatus: state.motionStatus,
-    motionStrength: Number(state.motionStrength.toFixed(3)),
-    motionTargetX: Number(state.motionTargetX.toFixed(1)),
-    motionTargetY: Number(state.motionTargetY.toFixed(1)),
-    focusX: Number(state.focusX.toFixed(1)),
-    focusY: Number(state.focusY.toFixed(1)),
+    motionHighlightCount: state.motionHighlights.length,
+    motionStrongestX: Number(strongestHighlight.x.toFixed(1)),
+    motionStrongestY: Number(strongestHighlight.y.toFixed(1)),
+    motionStrongestStrength: Number(strongestHighlight.strength.toFixed(3)),
     phase: state.phase,
     running: state.running,
     remaining: Number(state.remaining.toFixed(2)),
@@ -315,11 +337,34 @@ function getPublicState() {
   };
 }
 
-function updateMotionTarget(x, y, confidence, now = performance.now()) {
-  state.motionTargetX = clamp(x, 0, window.innerWidth);
-  state.motionTargetY = clamp(y, 0, window.innerHeight);
-  state.motionStrength = Math.max(state.motionStrength, clamp(confidence, 0, 1));
-  state.motionActiveUntil = now + 1400 + clamp(confidence, 0, 1) * 900;
+function updateMotionHighlights(points, now = performance.now()) {
+  for (const point of points) {
+    const x = clamp(point.x, 0, window.innerWidth);
+    const y = clamp(point.y, 0, window.innerHeight);
+    const strength = clamp(point.strength, 0, 1);
+    let nearest = null;
+    let nearestDistance = Infinity;
+
+    for (const highlight of state.motionHighlights) {
+      const distance = Math.hypot(highlight.x - x, highlight.y - y);
+      if (distance < nearestDistance) {
+        nearest = highlight;
+        nearestDistance = distance;
+      }
+    }
+
+    if (nearest && nearestDistance < 170) {
+      nearest.x += (x - nearest.x) * 0.35;
+      nearest.y += (y - nearest.y) * 0.35;
+      nearest.strength = Math.max(nearest.strength, strength);
+      nearest.updatedAt = now;
+    } else {
+      state.motionHighlights.push({ x, y, strength, updatedAt: now });
+    }
+  }
+
+  state.motionHighlights.sort((a, b) => b.strength - a.strength);
+  state.motionHighlights = state.motionHighlights.slice(0, 5);
 }
 
 function sampleMotionFocus(now) {
@@ -347,9 +392,12 @@ function sampleMotionFocus(now) {
 
   const previous = motionCapture.previousFrame;
   let totalWeight = 0;
-  let weightedX = 0;
-  let weightedY = 0;
   let activePixels = 0;
+  const cellColumns = 8;
+  const cellRows = 6;
+  const cellWeights = Array.from({ length: cellColumns * cellRows }, () => 0);
+  const cellWeightedX = Array.from({ length: cellColumns * cellRows }, () => 0);
+  const cellWeightedY = Array.from({ length: cellColumns * cellRows }, () => 0);
 
   for (let y = 0; y < sampleHeight; y += 1) {
     for (let x = 0; x < sampleWidth; x += 1) {
@@ -366,9 +414,14 @@ function sampleMotionFocus(now) {
 
       const weight = diff - 8;
       totalWeight += weight;
-      weightedX += x * weight;
-      weightedY += y * weight;
       activePixels += 1;
+
+      const cellX = Math.min(cellColumns - 1, Math.floor((x / sampleWidth) * cellColumns));
+      const cellY = Math.min(cellRows - 1, Math.floor((y / sampleHeight) * cellRows));
+      const cellIndex = cellY * cellColumns + cellX;
+      cellWeights[cellIndex] += weight;
+      cellWeightedX[cellIndex] += x * weight;
+      cellWeightedY[cellIndex] += y * weight;
     }
   }
 
@@ -382,12 +435,18 @@ function sampleMotionFocus(now) {
     return;
   }
 
-  updateMotionTarget(
-    (weightedX / totalWeight / sampleWidth) * window.innerWidth,
-    (weightedY / totalWeight / sampleHeight) * window.innerHeight,
-    confidence,
-    now
-  );
+  const points = cellWeights
+    .map((weight, index) => ({ weight, index }))
+    .filter((cell) => cell.weight > 60)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 4)
+    .map((cell) => ({
+      x: (cellWeightedX[cell.index] / cell.weight / sampleWidth) * window.innerWidth,
+      y: (cellWeightedY[cell.index] / cell.weight / sampleHeight) * window.innerHeight,
+      strength: clamp((cell.weight / Math.max(1, totalWeight)) * 1.7 + confidence * 0.26, 0.08, 0.55)
+    }));
+
+  updateMotionHighlights(points, now);
 }
 
 function stopMotionCapture() {
@@ -440,7 +499,7 @@ async function startMotionCapture() {
     motionCapture.available = true;
     state.motionStatus = 'active';
   } catch (error) {
-    console.warn('Focus Veil: motion focus capture unavailable.', error);
+    console.warn('Focus Veil: motion highlight capture unavailable.', error);
     stopMotionCapture();
     state.motionStatus = 'fallback';
   }
@@ -514,7 +573,7 @@ if (isSmoke) {
       return getPublicState();
     },
     simulateMotion(x, y, strength = 0.8) {
-      updateMotionTarget(x, y, strength);
+      updateMotionHighlights([{ x, y, strength }]);
       return getPublicState();
     },
     async setOperationMode(enabled) {

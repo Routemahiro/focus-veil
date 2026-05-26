@@ -284,21 +284,23 @@ async function runSmoke() {
 
     const motionState = await executeInRenderer('window.focusVeilSmoke.simulateMotion(260, 190, 0.85)');
     await sleep(450);
-    screenshots.push(await captureSmoke('motion-focus'));
+    screenshots.push(await captureSmoke('motion-highlight'));
     const focusedMotionState = await executeInRenderer('window.focusVeilSmoke.getState()');
     assertSmoke(
       assertions,
-      'motion focus accepts moving target',
-      motionState.motionStrength > 0.5 &&
-        Math.abs(motionState.motionTargetX - 260) < 2 &&
-        Math.abs(motionState.motionTargetY - 190) < 2,
+      'motion highlight accepts moving region',
+      motionState.motionHighlightCount > 0 &&
+        Math.abs(motionState.motionStrongestX - 260) < 2 &&
+        Math.abs(motionState.motionStrongestY - 190) < 2,
       motionState
     );
     assertSmoke(
       assertions,
-      'motion focus moves spotlight toward target',
-      Math.abs(focusedMotionState.focusX - 260) < 80 &&
-        Math.abs(focusedMotionState.focusY - 190) < 60,
+      'motion highlight keeps mouse spotlight independent',
+      Math.abs(focusedMotionState.motionStrongestX - 260) < 80 &&
+        Math.abs(focusedMotionState.motionStrongestY - 190) < 60 &&
+        Math.abs(focusedMotionState.mouseX - 640) < 2 &&
+        Math.abs(focusedMotionState.mouseY - 360) < 2,
       focusedMotionState
     );
 
