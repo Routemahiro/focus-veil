@@ -1,34 +1,55 @@
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const { pathToFileURL } = require('node:url');
 const {
   app,
   BrowserWindow,
   desktopCapturer,
   globalShortcut,
   ipcMain,
+  Menu,
+  nativeImage,
+  session,
+  Tray,
   screen
 } = require('electron');
 
 const isSmoke = process.argv.includes('--smoke');
 const smokeOutputDirectory = path.join(__dirname, '..', 'artifacts');
-const timerDurations = {
-  work: isSmoke ? 4 : 25 * 60,
-  break: isSmoke ? 2 : 5 * 60
+const rendererEntryPath = path.join(__dirname, 'renderer', 'index.html');
+const rendererEntryUrl = pathToFileURL(rendererEntryPath).href;
+const settingsFileName = 'settings.json';
+const timerActions = new Set(['start', 'pause', 'reset']);
+const defaultSettings = {
+  veilEnabled: true,
+  motionEnabled: true,
+  veilAlpha: 0.14,
+  spotlightRadius: 215,
+  workMinutes: 25,
+  breakMinutes: 5
 };
 
 const overlayWindows = new Map();
 
 let controlWindow = null;
+let tray = null;
 let operationMode = false;
 let smokeStarted = false;
 let controlWindowLoaded = false;
 let controlWindowShown = false;
 let rebuildingOverlays = false;
+let settings = { ...defaultSettings };
+let settingsSaveTimer = null;
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
 
 const timerState = {
   phase: 'work',
   running: false,
-  remaining: timerDurations.work,
+  remaining: getTimerDuration('work'),
   lastTick: Date.now(),
   notificationCount: 0
 };
@@ -41,6 +62,136 @@ function getSmokeDescriptor() {
     controls: true,
     preview: true
   };
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function readBoolean(value, fallback) {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function readNumber(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+
+  return clamp(number, min, max);
+}
+
+function normalizeSettings(candidate = {}) {
+  return {
+    veilEnabled: readBoolean(candidate.veilEnabled, defaultSettings.veilEnabled),
+    motionEnabled: readBoolean(candidate.motionEnabled, defaultSettings.motionEnabled),
+    veilAlpha: Number(
+      readNumber(candidate.veilAlpha, defaultSettings.veilAlpha, 0.04, 0.3).toFixed(3)
+    ),
+    spotlightRadius: Math.round(
+      readNumber(candidate.spotlightRadius, defaultSettings.spotlightRadius, 140, 360)
+    ),
+    workMinutes: Math.round(readNumber(candidate.workMinutes, defaultSettings.workMinutes, 1, 180)),
+    breakMinutes: Math.round(readNumber(candidate.breakMinutes, defaultSettings.breakMinutes, 1, 60))
+  };
+}
+
+function getSettingsPath() {
+  return path.join(app.getPath('userData'), settingsFileName);
+}
+
+function getTimerDuration(phase) {
+  if (isSmoke) {
+    return phase === 'work' ? 4 : 2;
+  }
+
+  return phase === 'work' ? settings.workMinutes * 60 : settings.breakMinutes * 60;
+}
+
+function getSettingsSnapshot() {
+  return { ...settings };
+}
+
+async function loadSettings() {
+  if (isSmoke) {
+    settings = { ...defaultSettings };
+    return;
+  }
+
+  try {
+    const raw = await fs.readFile(getSettingsPath(), 'utf8');
+    settings = normalizeSettings({
+      ...defaultSettings,
+      ...JSON.parse(raw)
+    });
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('Focus Veil: failed to read settings, using defaults.', error);
+    }
+    settings = { ...defaultSettings };
+  }
+
+  timerState.remaining = getTimerDuration(timerState.phase);
+}
+
+async function saveSettingsNow() {
+  if (isSmoke) {
+    return;
+  }
+
+  const settingsPath = getSettingsPath();
+  await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+  await fs.writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+}
+
+function scheduleSettingsSave() {
+  if (isSmoke) {
+    return;
+  }
+
+  clearTimeout(settingsSaveTimer);
+  settingsSaveTimer = setTimeout(() => {
+    saveSettingsNow().catch((error) => {
+      console.warn('Focus Veil: failed to save settings.', error);
+    });
+  }, 300);
+}
+
+function broadcastSettings(source = 'main') {
+  const payload = {
+    settings: getSettingsSnapshot(),
+    source
+  };
+
+  for (const win of getOverlayList()) {
+    sendToWindow(win, 'focus-veil:settings-state', payload);
+  }
+}
+
+function updateSettings(patch = {}, source = 'main') {
+  const previousWorkMinutes = settings.workMinutes;
+  const previousBreakMinutes = settings.breakMinutes;
+  settings = normalizeSettings({
+    ...settings,
+    ...patch
+  });
+
+  const durationChanged =
+    previousWorkMinutes !== settings.workMinutes || previousBreakMinutes !== settings.breakMinutes;
+
+  if (durationChanged && !timerState.running) {
+    timerState.remaining = getTimerDuration(timerState.phase);
+  }
+
+  scheduleSettingsSave();
+  broadcastSettings(source);
+
+  if (durationChanged) {
+    broadcastTimerState('settings');
+  }
+
+  updateTrayMenu();
+  return getSettingsSnapshot();
 }
 
 function getDisplayDescriptors() {
@@ -70,6 +221,36 @@ function sendToWindow(win, channel, payload) {
   win.webContents.send(channel, payload);
 }
 
+function isTrustedRendererUrl(url) {
+  return typeof url === 'string' && url.startsWith(rendererEntryUrl);
+}
+
+function assertTrustedIpcEvent(event) {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const senderFrameUrl = event.senderFrame?.url ?? event.sender.getURL();
+
+  if (
+    !senderWindow ||
+    senderWindow.isDestroyed() ||
+    !getOverlayList().includes(senderWindow) ||
+    !isTrustedRendererUrl(senderFrameUrl)
+  ) {
+    throw new Error('Rejected IPC from an untrusted renderer.');
+  }
+
+  return senderWindow;
+}
+
+function hardenWebContents(win) {
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  win.webContents.on('will-navigate', (event, targetUrl) => {
+    if (!isTrustedRendererUrl(targetUrl)) {
+      event.preventDefault();
+    }
+  });
+}
+
 function tickTimerState(now = Date.now()) {
   if (!timerState.running) {
     timerState.lastTick = now;
@@ -85,9 +266,10 @@ function tickTimerState(now = Date.now()) {
   }
 
   timerState.phase = timerState.phase === 'work' ? 'break' : 'work';
-  timerState.remaining = timerDurations[timerState.phase];
+  timerState.remaining = getTimerDuration(timerState.phase);
   timerState.running = false;
   timerState.notificationCount += 1;
+  updateTrayMenu();
   return true;
 }
 
@@ -114,6 +296,10 @@ function broadcastTimerState(source = 'main') {
 }
 
 function handleTimerCommand(action) {
+  if (!timerActions.has(action)) {
+    throw new Error(`Unsupported timer action: ${action}`);
+  }
+
   tickTimerState();
 
   if (action === 'start') {
@@ -123,11 +309,12 @@ function handleTimerCommand(action) {
     timerState.running = false;
   } else if (action === 'reset') {
     timerState.running = false;
-    timerState.remaining = timerDurations[timerState.phase];
+    timerState.remaining = getTimerDuration(timerState.phase);
     timerState.lastTick = Date.now();
   }
 
   broadcastTimerState(`timer:${action}`);
+  updateTrayMenu();
   return getTimerSnapshot();
 }
 
@@ -170,6 +357,7 @@ function setOperationMode(enabled, source = 'main') {
   }
 
   sendOperationMode(source);
+  updateTrayMenu();
 }
 
 function registerShortcuts() {
@@ -188,6 +376,134 @@ function registerShortcuts() {
   if (!refreshRegistered) {
     console.warn('Focus Veil: failed to register CommandOrControl+Shift+R.');
   }
+}
+
+function createTrayIcon() {
+  const size = 16;
+  const bitmap = Buffer.alloc(size * size * 4);
+  const center = (size - 1) / 2;
+
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const offset = (y * size + x) * 4;
+      const distance = Math.hypot(x - center, y - center);
+      const ring = distance <= 7 && distance >= 4.4;
+      const core = distance < 3.2;
+      const alpha = ring ? 235 : core ? 205 : 0;
+
+      bitmap[offset] = core ? 64 : 216;
+      bitmap[offset + 1] = core ? 91 : 226;
+      bitmap[offset + 2] = core ? 95 : 166;
+      bitmap[offset + 3] = alpha;
+    }
+  }
+
+  return nativeImage.createFromBitmap(bitmap, {
+    width: size,
+    height: size,
+    scaleFactor: 1
+  });
+}
+
+function formatTrayTime() {
+  const remaining = Math.max(0, Math.ceil(timerState.remaining));
+  const minutes = Math.floor(remaining / 60);
+  const seconds = remaining % 60;
+  return `${timerState.phase === 'work' ? 'Focus' : 'Break'} ${minutes}:${seconds
+    .toString()
+    .padStart(2, '0')}`;
+}
+
+function updateTrayMenu() {
+  if (!tray) {
+    return;
+  }
+
+  const template = [
+    {
+      label: `Focus Veil - ${formatTrayTime()}`,
+      enabled: false
+    },
+    { type: 'separator' },
+    {
+      label: timerState.running ? 'Pause Timer' : 'Start Timer',
+      click: () => handleTimerCommand(timerState.running ? 'pause' : 'start')
+    },
+    {
+      label: 'Reset Timer',
+      click: () => handleTimerCommand('reset')
+    },
+    { type: 'separator' },
+    {
+      label: 'Operation Mode',
+      type: 'checkbox',
+      checked: operationMode,
+      click: (item) => setOperationMode(item.checked, 'tray')
+    },
+    {
+      label: 'Overlay Enabled',
+      type: 'checkbox',
+      checked: settings.veilEnabled,
+      click: (item) => updateSettings({ veilEnabled: item.checked }, 'tray')
+    },
+    {
+      label: 'Motion Highlight',
+      type: 'checkbox',
+      checked: settings.motionEnabled,
+      click: (item) => updateSettings({ motionEnabled: item.checked }, 'tray')
+    },
+    {
+      label: 'Veil Strength',
+      submenu: [
+        {
+          label: 'Light',
+          type: 'radio',
+          checked: settings.veilAlpha <= 0.11,
+          click: () => updateSettings({ veilAlpha: 0.1 }, 'tray')
+        },
+        {
+          label: 'Normal',
+          type: 'radio',
+          checked: settings.veilAlpha > 0.11 && settings.veilAlpha < 0.18,
+          click: () => updateSettings({ veilAlpha: 0.14 }, 'tray')
+        },
+        {
+          label: 'Deep',
+          type: 'radio',
+          checked: settings.veilAlpha >= 0.18,
+          click: () => updateSettings({ veilAlpha: 0.2 }, 'tray')
+        }
+      ]
+    },
+    { type: 'separator' },
+    {
+      label: 'Refresh Overlay Windows',
+      click: () => rebuildOverlayWindows('tray-refresh')
+    },
+    {
+      label: 'Quit Focus Veil',
+      click: async () => {
+        clearTimeout(settingsSaveTimer);
+        await saveSettingsNow().catch((error) => {
+          console.warn('Focus Veil: failed to save settings before quit.', error);
+        });
+        app.quit();
+      }
+    }
+  ];
+
+  tray.setToolTip(`Focus Veil - ${formatTrayTime()}`);
+  tray.setContextMenu(Menu.buildFromTemplate(template));
+}
+
+function createTray() {
+  if (tray || isSmoke) {
+    return;
+  }
+
+  tray = new Tray(createTrayIcon());
+  tray.on('click', () => setOperationMode(!operationMode, 'tray-click'));
+  updateTrayMenu();
 }
 
 function sleep(milliseconds) {
@@ -442,6 +758,7 @@ function createOverlayWindow(descriptor) {
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setIgnoreMouseEvents(true, { forward: true });
   win.setContentProtection(true);
+  hardenWebContents(win);
 
   try {
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -449,13 +766,13 @@ function createOverlayWindow(descriptor) {
     // Best effort only. Electron documents this as unsupported on Windows.
   }
 
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
+  win.loadFile(rendererEntryPath, {
     query: {
       smoke: isSmoke ? '1' : '0',
       preview: descriptor.preview ? '1' : '0',
       controls: descriptor.controls ? '1' : '0',
       display: descriptor.key,
-      motion: '1'
+      motion: settings.motionEnabled ? '1' : '0'
     }
   });
 
@@ -464,6 +781,10 @@ function createOverlayWindow(descriptor) {
     applyOperationModeToWindow(win);
     sendOperationMode('ready');
     sendToWindow(win, 'focus-veil:timer-state', getTimerSnapshot());
+    sendToWindow(win, 'focus-veil:settings-state', {
+      settings: getSettingsSnapshot(),
+      source: 'ready'
+    });
 
     if (descriptor.controls) {
       controlWindowShown = true;
@@ -475,6 +796,10 @@ function createOverlayWindow(descriptor) {
     console.log(`FOCUS_VEIL_READY ${descriptor.key}`);
     sendOperationMode('load');
     sendToWindow(win, 'focus-veil:timer-state', getTimerSnapshot());
+    sendToWindow(win, 'focus-veil:settings-state', {
+      settings: getSettingsSnapshot(),
+      source: 'load'
+    });
 
     if (descriptor.controls) {
       controlWindowLoaded = true;
@@ -542,26 +867,43 @@ function maintainOverlayPresence() {
   }
 }
 
-ipcMain.handle('focus-veil:set-operation-mode', (_event, enabled) => {
+ipcMain.handle('focus-veil:set-operation-mode', (event, enabled) => {
+  assertTrustedIpcEvent(event);
   setOperationMode(Boolean(enabled), 'renderer');
   return { enabled: operationMode };
 });
 
-ipcMain.handle('focus-veil:get-main-state', () => ({
-  operationMode,
-  smoke: isSmoke,
-  timer: getTimerSnapshot(),
-  overlays: getOverlayList().map((win) => ({
-    key: win.focusVeilKey,
-    controls: Boolean(win.focusVeilControls),
-    bounds: win.getBounds()
-  }))
-}));
+ipcMain.handle('focus-veil:get-main-state', (event) => {
+  assertTrustedIpcEvent(event);
+  return {
+    operationMode,
+    smoke: isSmoke,
+    settings: getSettingsSnapshot(),
+    timer: getTimerSnapshot(),
+    overlays: getOverlayList().map((win) => ({
+      key: win.focusVeilKey,
+      controls: Boolean(win.focusVeilControls),
+      bounds: win.getBounds()
+    }))
+  };
+});
 
-ipcMain.handle('focus-veil:timer-command', (_event, action) => handleTimerCommand(action));
+ipcMain.handle('focus-veil:timer-command', (event, action) => {
+  assertTrustedIpcEvent(event);
+  return handleTimerCommand(action);
+});
+
+ipcMain.handle('focus-veil:update-settings', (event, patch) => {
+  assertTrustedIpcEvent(event);
+  return updateSettings(patch, 'renderer');
+});
 
 ipcMain.handle('focus-veil:get-capture-source', async (event) => {
-  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const senderWindow = assertTrustedIpcEvent(event);
+  if (!settings.motionEnabled) {
+    return null;
+  }
+
   const displayId = senderWindow?.focusVeilDisplayId;
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
@@ -584,7 +926,34 @@ ipcMain.handle('focus-veil:get-capture-source', async (event) => {
   };
 });
 
-app.whenReady().then(() => {
+function configureSessionSecurity() {
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const senderWindow = BrowserWindow.fromWebContents(webContents);
+    const trusted =
+      senderWindow &&
+      !senderWindow.isDestroyed() &&
+      getOverlayList().includes(senderWindow) &&
+      isTrustedRendererUrl(webContents.getURL());
+
+    callback(Boolean(trusted && ['media', 'display-capture'].includes(permission)));
+  });
+}
+
+if (gotSingleInstanceLock) {
+  app.on('second-instance', () => {
+    rebuildOverlayWindows('second-instance');
+    setOperationMode(true, 'second-instance');
+  });
+}
+
+app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) {
+    return;
+  }
+
+  await loadSettings();
+  configureSessionSecurity();
+  createTray();
   createOverlayWindows();
   registerShortcuts();
 

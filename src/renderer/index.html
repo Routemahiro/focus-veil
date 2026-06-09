@@ -2,6 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    >
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Focus Veil</title>
     <link rel="stylesheet" href="./styles.css">
@@ -40,6 +44,48 @@
           <button type="button" data-action="start">Start</button>
           <button type="button" data-action="pause">Pause</button>
           <button type="button" data-action="reset">Reset</button>
+        </div>
+        <div class="settings-controls" aria-label="Focus Veil settings">
+          <label class="range-line">
+            <span>Veil</span>
+            <input
+              type="range"
+              data-setting="veilAlpha"
+              min="0.04"
+              max="0.30"
+              step="0.01"
+              value="0.14"
+            >
+          </label>
+          <label class="range-line">
+            <span>Spot</span>
+            <input
+              type="range"
+              data-setting="spotlightRadius"
+              min="140"
+              max="360"
+              step="5"
+              value="215"
+            >
+          </label>
+          <div class="number-grid">
+            <label>
+              <span>Focus</span>
+              <input type="number" data-setting="workMinutes" min="1" max="180" step="1" value="25">
+            </label>
+            <label>
+              <span>Break</span>
+              <input type="number" data-setting="breakMinutes" min="1" max="60" step="1" value="5">
+            </label>
+          </div>
+          <label class="toggle-line">
+            <input type="checkbox" data-setting="motionEnabled" checked>
+            <span>Motion highlight</span>
+          </label>
+          <label class="toggle-line">
+            <input type="checkbox" data-setting="veilEnabled" checked>
+            <span>Overlay enabled</span>
+          </label>
         </div>
       </section>
     </main>

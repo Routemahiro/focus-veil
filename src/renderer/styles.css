@@ -158,7 +158,8 @@ body.overlay-only .overlay-ui {
   padding: 0 8px 8px;
 }
 
-.timer-controls button {
+.timer-controls button,
+.settings-controls input {
   min-height: 30px;
   border: 1px solid rgba(219, 232, 229, 0.2);
   border-radius: 6px;
@@ -179,12 +180,69 @@ body.timer-running .timer-controls button[data-action="start"] {
   color: rgba(192, 218, 214, 0.72);
 }
 
+.settings-controls {
+  display: none;
+  gap: 8px;
+  padding: 0 8px 9px;
+  color: rgba(218, 234, 231, 0.84);
+  font-size: 11px;
+}
+
+.range-line,
+.toggle-line,
+.number-grid label {
+  display: grid;
+  gap: 5px;
+}
+
+.range-line {
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+}
+
+.range-line span,
+.toggle-line span,
+.number-grid span {
+  font-weight: 600;
+}
+
+.settings-controls input[type="range"] {
+  width: 100%;
+  min-height: 24px;
+  padding: 0;
+  accent-color: #9bd8ce;
+}
+
+.number-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.number-grid input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.toggle-line {
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+}
+
+.toggle-line input {
+  width: 14px;
+  min-height: 14px;
+  accent-color: #9bd8ce;
+}
+
 body.operation-mode .overlay-ui {
   pointer-events: auto;
 }
 
 body.operation-mode .timer-panel {
-  min-width: 248px;
+  min-width: 272px;
   background: rgba(18, 29, 32, 0.58);
   border-color: rgba(210, 224, 224, 0.28);
 }
@@ -194,6 +252,10 @@ body.operation-mode .mode-label {
 }
 
 body.operation-mode .timer-controls {
+  display: grid;
+}
+
+body.operation-mode .settings-controls {
   display: grid;
 }
 
@@ -207,6 +269,6 @@ body.operation-mode .timer-line {
   }
 
   body.operation-mode .timer-panel {
-    min-width: 168px;
+    min-width: 188px;
   }
 }

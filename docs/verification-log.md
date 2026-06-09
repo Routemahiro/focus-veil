@@ -1,5 +1,36 @@
 # Verification Log
 
+## 2026-06-09
+
+### 変更範囲
+
+- トレイメニューを追加。タイマー開始/停止、Reset、Operation Mode、Overlay enabled、Motion highlight、Veil Strength、Refresh Overlay Windows、Quitを操作可能にした。
+- 軽量設定保存を追加。暗幕透明度、スポット半径、Focus/Break分数、Motion highlight、Overlay enabledをElectronのuserData配下 `settings.json` に保存する。smoke実行時は保存しない。
+- 操作モード内に最小設定UIを追加。
+- IPC sender検証、timer command allowlist、CSP、navigation/window.open制限、permission request handler、単一インスタンス制御を追加。
+
+### 実行コマンド
+
+| コマンド | 結果 | メモ |
+| --- | --- | --- |
+| `node --check src/main.js` | 成功 | 構文OK |
+| `node --check src/preload.js` | 成功 | 構文OK |
+| `node --check src/renderer/renderer.js` | 成功 | 構文OK |
+| `npm run smoke` | 成功 | レポート: `artifacts/smoke-report.json` |
+| `npm audit --omit=optional` | 成功 | `found 0 vulnerabilities` |
+| 短時間通常起動 | 成功 | `FOCUS_VEIL_READY display-...` を2件確認。stderrなし。検証用Electronプロセスは停止済み |
+
+### smoke確認
+
+| 確認項目 | 結果 |
+| --- | --- |
+| 通常時に操作ボタンが非表示 | OK |
+| 操作モードで操作ボタンと設定UIが表示 | OK |
+| Start/Pause/Reset | OK |
+| 短時間タイマー遷移と通知演出 | OK |
+| motion highlight疑似領域 | OK |
+| 4枚のスクリーンショットが非ブランク | OK |
+
 ## 2026-05-25
 
 ### 実行環境

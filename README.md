@@ -25,9 +25,11 @@ npm run smoke
 
 - 通常時: 画面右下に残り時間だけを表示します。ウィンドウはクリック透過です。
 - 注目スポット: 画面内の動きが検出できる場合はその周辺を優先して明るくし、検出できない場合はマウス周辺へ戻ります。
-- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset` を表示し、クリックできます。
+- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポット半径、Focus/Break分数、Motion highlight、Overlay enabledを表示し、クリックできます。
 - 操作モード終了: `Ctrl+Shift+F` で再切り替え、または操作モード中に `Esc`。
 - オーバーレイ再配置: `Ctrl+Shift+R`。Windows仮想デスクトップ切り替え後に表示が戻らない場合の復帰用です。
+- トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Motion highlight、Veil Strength、再配置、終了を操作できます。
+- 設定保存: 透明度、スポット半径、Focus/Break分数、Motion highlight、Overlay enabledはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。
 - Ctrl単体: Electronウィンドウにフォーカスがある場合のみベストエフォートで反応します。通常のクリック透過状態では背面作業を優先するため、安定操作は `Ctrl+Shift+F` に寄せています。
 
 ## 設計方針
@@ -48,6 +50,7 @@ npm run smoke
 - `node --check`: `src/main.js`、`src/preload.js`、`src/renderer/renderer.js` で成功。
 - `npm run smoke`: 成功。Start/Pause/Reset、短時間タイマー遷移、motion highlightの疑似領域、通知演出、4枚のスクリーンショット生成を確認。
 - `npm start`: `FOCUS_VEIL_READY` まで到達。2026-05-25の2画面環境で `display-...` が2件出力され、ディスプレイ別overlay window作成を確認。
+- 2026-06-09追加確認: トレイ、設定保存、操作モード内設定UI、IPC sender検証、CSP追加後に `node --check`、`npm audit --omit=optional`、`npm run smoke`、短時間通常起動を確認。
 
 詳細は `docs/verification-log.md` を参照してください。
 
@@ -59,7 +62,7 @@ npm run smoke
 - Focus Veil自身がmotion captureへ写り込むのを避けるため、overlay windowにはcontent protectionを有効化しています。そのため外部スクリーンショット/画面共有にFocus Veilの見た目が写らない場合があります。
 - Windows仮想デスクトップへの自動追従はベストエフォートです。Electron標準APIだけではWindows上で全仮想デスクトップへ確実にピン留めできないため、表示が戻らない場合は `Ctrl+Shift+R` でoverlay windowを現在のデスクトップへ作り直します。
 - マルチモニター/DPI差分はディスプレイごとのboundsで作成する構成に変更済みですが、DPI混在と負座標配置の手動確認は未実施です。
-- インストーラー、トレイ常駐、BGM/音声通知、複数テーマ、複雑な設定保存はv0.1の対象外です。
+- インストーラー、BGM/音声通知、複数テーマ、複雑なプロファイル管理はv0.1の対象外です。現在の設定保存は軽量な単一設定ファイルです。
 
 ## 残課題
 

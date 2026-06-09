@@ -12,6 +12,7 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 - Motion highlightは、各ディスプレイのscreen captureを低解像度で読み、前フレームとの差分から動きのある領域を推定して薄いハイライトを足します。メインスポットはマウス周辺に残します。
 - Ctrl単体の通常時操作は、非フォーカス/クリック透過との相性が悪いため安定要件から外し、`Ctrl+Shift+F` を安定操作として採用しました。
 - 通知は音・点滅・強いフラッシュを使わず、暗幕の透明度とフォーカス半径を1.6秒だけ緩く変化させます。
+- 2026-06-09時点で、トレイメニュー、軽量な設定保存、Motion highlightのオン/オフ、IPC sender検証、CSP、navigation/window.open制限を追加しています。
 
 ## 比較
 
@@ -23,6 +24,7 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 | 注目補助 | motion highlight + マウススポット | Webカメラ視線推定 | 視線推定は精度、権限、負荷、プライバシーのコストが大きいため |
 | 水面 | 低密度の揺らぎと散発的な波紋 | 粒子、波紋大量描画、WebGL | 注意を奪わず、CPU/GPU負荷を抑えるため |
 | 通知 | 暗幕がふわっと開く | 点滅、白フラッシュ、音 | 集中を強く断ち切らないため |
+| 常駐操作 | トレイ + 操作モード内設定 | 常時表示の大きな設定画面 | 通常時の作業画面を邪魔しないまま、復旧と終了の導線を確保するため |
 
 ## 具体例
 
@@ -31,6 +33,10 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 - `src/main.js`: BrowserWindow作成、仮想ディスプレイ全体への配置、クリック透過、操作モード、グローバルショートカット、smoke自動検証。
 - `src/preload.js`: contextBridge経由で安全に操作モードAPIを公開。
 - `src/renderer/`: Canvas描画、ポモドーロ、タイマーUI、通知演出。
+
+設定はメインプロセスを単一ソースにし、ElectronのuserData配下の `settings.json` へ保存します。対象は暗幕の透明度、スポット半径、Focus/Break分数、Motion highlight、Overlay enabledです。smoke実行時は保存を無効化し、検証結果がユーザー設定に影響しないようにしています。
+
+IPCはoverlay windowかつ `renderer/index.html` からのsenderだけを受け付けます。timer commandは `start`、`pause`、`reset` のallowlistで検証します。rendererにはCSPを設定し、外部navigationと `window.open` は拒否します。
 
 BrowserWindowは `transparent: true`、`frame: false`、`skipTaskbar: true`、`focusable: false`、`alwaysOnTop: true` を基準にしています。以前は `screen.getAllDisplays()` から仮想ディスプレイ全体の大きな矩形を作っていましたが、Windowsでは片側モニターだけに見えるケースがあったため、現在は各displayのboundsごとに1枚ずつoverlay windowを作ります。
 

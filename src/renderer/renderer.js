@@ -5,12 +5,22 @@ const timerPanel = document.querySelector('.timer-panel');
 const modeLabel = document.querySelector('#mode-label');
 const timeReadout = document.querySelector('#time-readout');
 const timerControls = document.querySelector('.timer-controls');
+const settingsControls = document.querySelector('.settings-controls');
 
 const query = new URLSearchParams(window.location.search);
 const isSmoke = query.get('smoke') === '1';
 const isPreview = query.get('preview') === '1';
 const hasControls = query.get('controls') !== '0';
-const motionFocusEnabled = query.get('motion') !== '0';
+const initialMotionEnabled = query.get('motion') !== '0';
+const motionFocusEnabled = true;
+const defaultSettings = {
+  veilEnabled: true,
+  motionEnabled: initialMotionEnabled,
+  veilAlpha: 0.14,
+  spotlightRadius: 215,
+  workMinutes: 25,
+  breakMinutes: 5
+};
 const durations = {
   work: isSmoke ? 4 : 25 * 60,
   break: isSmoke ? 2 : 5 * 60
@@ -22,7 +32,8 @@ const state = {
   mouseX: window.innerWidth / 2,
   mouseY: window.innerHeight / 2,
   motionHighlights: [],
-  motionStatus: motionFocusEnabled ? 'starting' : 'disabled',
+  motionStatus: initialMotionEnabled ? 'starting' : 'disabled',
+  settings: { ...defaultSettings },
   phase: 'work',
   running: false,
   remaining: durations.work,
@@ -34,7 +45,7 @@ const state = {
 };
 
 const motionCapture = {
-  enabled: motionFocusEnabled,
+  enabled: initialMotionEnabled,
   available: false,
   stream: null,
   video: null,
@@ -211,9 +222,16 @@ function drawMotionHighlights(now) {
 function drawVeil(now = performance.now()) {
   const width = window.innerWidth;
   const height = window.innerHeight;
+
+  if (!state.settings.veilEnabled) {
+    context.clearRect(0, 0, width, height);
+    return;
+  }
+
   const pulse = getNotificationPulse(now);
-  const veilAlpha = 0.14 - pulse * 0.055;
-  const radius = (state.operationMode ? 260 : 215) + pulse * 90;
+  const veilAlpha = Math.max(0.02, state.settings.veilAlpha - pulse * 0.055);
+  const baseRadius = state.settings.spotlightRadius + (state.operationMode ? 45 : 0);
+  const radius = baseRadius + pulse * 90;
 
   context.clearRect(0, 0, width, height);
 
@@ -313,6 +331,87 @@ function applyTimerState(timerState) {
   updateTimerUi();
 }
 
+function normalizeSettings(candidate = {}) {
+  return {
+    veilEnabled:
+      typeof candidate.veilEnabled === 'boolean'
+        ? candidate.veilEnabled
+        : defaultSettings.veilEnabled,
+    motionEnabled:
+      typeof candidate.motionEnabled === 'boolean'
+        ? candidate.motionEnabled
+        : defaultSettings.motionEnabled,
+    veilAlpha: clamp(Number(candidate.veilAlpha) || defaultSettings.veilAlpha, 0.04, 0.3),
+    spotlightRadius: Math.round(
+      clamp(Number(candidate.spotlightRadius) || defaultSettings.spotlightRadius, 140, 360)
+    ),
+    workMinutes: Math.round(
+      clamp(Number(candidate.workMinutes) || defaultSettings.workMinutes, 1, 180)
+    ),
+    breakMinutes: Math.round(
+      clamp(Number(candidate.breakMinutes) || defaultSettings.breakMinutes, 1, 60)
+    )
+  };
+}
+
+function syncSettingsControls() {
+  if (!settingsControls) {
+    return;
+  }
+
+  for (const control of settingsControls.querySelectorAll('[data-setting]')) {
+    const value = state.settings[control.dataset.setting];
+    if (control.type === 'checkbox') {
+      control.checked = Boolean(value);
+    } else {
+      control.value = String(value);
+    }
+  }
+}
+
+function applySettings(settingsPatch = {}) {
+  const nextSettings = normalizeSettings({
+    ...state.settings,
+    ...settingsPatch
+  });
+  const motionWasEnabled = state.settings.motionEnabled;
+  state.settings = nextSettings;
+  body.classList.toggle('overlay-disabled', !state.settings.veilEnabled);
+  syncSettingsControls();
+
+  if (!state.settings.motionEnabled) {
+    motionCapture.enabled = false;
+    state.motionHighlights = [];
+    state.motionStatus = 'disabled';
+    stopMotionCapture();
+    return;
+  }
+
+  motionCapture.enabled = motionFocusEnabled;
+  if (!motionFocusEnabled) {
+    state.motionStatus = 'disabled';
+    return;
+  }
+
+  if (!motionWasEnabled || !motionCapture.stream) {
+    startMotionCapture();
+  }
+}
+
+let settingsUpdateTimer = null;
+
+function requestSettingsUpdate(patch) {
+  applySettings(patch);
+  clearTimeout(settingsUpdateTimer);
+  settingsUpdateTimer = setTimeout(() => {
+    window.focusVeil?.updateSettings(patch).catch(() => {
+      window.focusVeil?.getMainState().then((mainState) => {
+        applySettings(mainState.settings);
+      });
+    });
+  }, 120);
+}
+
 function getPublicState() {
   const strongestHighlight = state.motionHighlights.reduce(
     (strongest, highlight) => (highlight.strength > strongest.strength ? highlight : strongest),
@@ -333,6 +432,7 @@ function getPublicState() {
     remaining: Number(state.remaining.toFixed(2)),
     timeText: timeReadout.textContent,
     notificationCount: state.notificationCount,
+    settings: { ...state.settings },
     controlsVisible: hasControls && getComputedStyle(timerControls).display !== 'none'
   };
 }
@@ -451,6 +551,9 @@ function sampleMotionFocus(now) {
 
 function stopMotionCapture() {
   if (!motionCapture.stream) {
+    motionCapture.available = false;
+    motionCapture.video = null;
+    motionCapture.previousFrame = null;
     return;
   }
 
@@ -459,10 +562,16 @@ function stopMotionCapture() {
   }
 
   motionCapture.stream = null;
+  motionCapture.video = null;
   motionCapture.available = false;
+  motionCapture.previousFrame = null;
 }
 
 async function startMotionCapture() {
+  if (motionCapture.stream) {
+    return;
+  }
+
   if (!motionCapture.enabled || !navigator.mediaDevices?.getUserMedia) {
     state.motionStatus = motionCapture.enabled ? 'unavailable' : 'disabled';
     return;
@@ -518,6 +627,28 @@ timerControls.addEventListener('click', async (event) => {
   }
 });
 
+settingsControls?.addEventListener('input', (event) => {
+  const control = event.target.closest('[data-setting]');
+  if (!control || control.type === 'number' || control.type === 'checkbox') {
+    return;
+  }
+
+  const key = control.dataset.setting;
+  const value = control.type === 'checkbox' ? control.checked : Number(control.value);
+  requestSettingsUpdate({ [key]: value });
+});
+
+settingsControls?.addEventListener('change', (event) => {
+  const control = event.target.closest('[data-setting]');
+  if (!control) {
+    return;
+  }
+
+  const key = control.dataset.setting;
+  const value = control.type === 'checkbox' ? control.checked : Number(control.value);
+  requestSettingsUpdate({ [key]: value });
+});
+
 window.addEventListener('resize', resizeCanvas);
 
 window.addEventListener('mousemove', (event) => {
@@ -550,6 +681,15 @@ window.focusVeil?.onOperationModeChanged(({ enabled }) => {
 
 window.focusVeil?.onTimerStateChanged((timerState) => {
   applyTimerState(timerState);
+});
+
+window.focusVeil?.onSettingsChanged((payload) => {
+  applySettings(payload?.settings);
+});
+
+window.focusVeil?.getMainState().then((mainState) => {
+  applySettings(mainState.settings);
+  applyTimerState(mainState.timer);
 });
 
 if (isPreview) {
@@ -590,5 +730,6 @@ if (isSmoke) {
 
 resizeCanvas();
 updateTimerUi();
+syncSettingsControls();
 startMotionCapture();
 requestAnimationFrame(animationLoop);
