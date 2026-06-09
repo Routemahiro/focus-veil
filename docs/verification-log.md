@@ -2,6 +2,26 @@
 
 ## 2026-06-09
 
+### Spotlight体感調整
+
+- マウススポットの既定値を暗幕16%、サイズ245px、softness 0.68へ変更。
+- `spotlightSoftness` を設定保存対象に追加し、操作モード内に `Soft` スライダーを追加。
+- マウス座標をtargetと描画用spotに分け、軽いスムージングを追加。
+- マウススポットの描画パラメータを集約し、中心の抜けを強め、境界を広くぼかす構成に変更。
+- Motion highlightを最大3点に絞り、小さい芯、広いハロー、短いattack/hold/decayで表示する構成に変更。
+- smokeに `spotlight settings update through IPC` を追加し、`veilAlpha`、`spotlightRadius`、`spotlightSoftness` の反映を確認。
+
+#### 実行コマンド
+
+| コマンド | 結果 | メモ |
+| --- | --- | --- |
+| `node --check src/main.js` | 成功 | 構文OK |
+| `node --check src/preload.js` | 成功 | 構文OK |
+| `node --check src/renderer/renderer.js` | 成功 | 構文OK |
+| `npm run smoke` | 成功 | レポート: `artifacts/smoke-report.json` |
+| `npm audit --omit=optional` | 成功 | `found 0 vulnerabilities` |
+| 短時間通常起動 | 成功 | `FOCUS_VEIL_READY display-...` を2件確認。stderrなし。検証用Electronプロセスは停止済み |
+
 ### 変更範囲
 
 - トレイメニューを追加。タイマー開始/停止、Reset、Operation Mode、Overlay enabled、Motion highlight、Veil Strength、Refresh Overlay Windows、Quitを操作可能にした。

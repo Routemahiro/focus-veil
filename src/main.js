@@ -23,8 +23,9 @@ const timerActions = new Set(['start', 'pause', 'reset']);
 const defaultSettings = {
   veilEnabled: true,
   motionEnabled: true,
-  veilAlpha: 0.14,
-  spotlightRadius: 215,
+  veilAlpha: 0.16,
+  spotlightRadius: 245,
+  spotlightSoftness: 0.68,
   workMinutes: 25,
   breakMinutes: 5
 };
@@ -90,6 +91,14 @@ function normalizeSettings(candidate = {}) {
     ),
     spotlightRadius: Math.round(
       readNumber(candidate.spotlightRadius, defaultSettings.spotlightRadius, 140, 360)
+    ),
+    spotlightSoftness: Number(
+      readNumber(
+        candidate.spotlightSoftness,
+        defaultSettings.spotlightSoftness,
+        0.35,
+        0.9
+      ).toFixed(2)
     ),
     workMinutes: Math.round(readNumber(candidate.workMinutes, defaultSettings.workMinutes, 1, 180)),
     breakMinutes: Math.round(readNumber(candidate.breakMinutes, defaultSettings.breakMinutes, 1, 60))
@@ -465,7 +474,7 @@ function updateTrayMenu() {
           label: 'Normal',
           type: 'radio',
           checked: settings.veilAlpha > 0.11 && settings.veilAlpha < 0.18,
-          click: () => updateSettings({ veilAlpha: 0.14 }, 'tray')
+          click: () => updateSettings({ veilAlpha: 0.16 }, 'tray')
         },
         {
           label: 'Deep',
@@ -597,6 +606,18 @@ async function runSmoke() {
     screenshots.push(await captureSmoke('normal'));
     const normalState = await executeInRenderer('window.focusVeilSmoke.getState()');
     assertSmoke(assertions, 'normal mode hides controls', !normalState.controlsVisible, normalState);
+
+    const spotlightSettingsState = await executeInRenderer(
+      'window.focusVeilSmoke.setSettings({ veilAlpha: 0.16, spotlightRadius: 270, spotlightSoftness: 0.78 })'
+    );
+    assertSmoke(
+      assertions,
+      'spotlight settings update through IPC',
+      spotlightSettingsState.settings.veilAlpha === 0.16 &&
+        spotlightSettingsState.settings.spotlightRadius === 270 &&
+        spotlightSettingsState.settings.spotlightSoftness === 0.78,
+      spotlightSettingsState
+    );
 
     const motionState = await executeInRenderer('window.focusVeilSmoke.simulateMotion(260, 190, 0.85)');
     await sleep(450);

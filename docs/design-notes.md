@@ -9,10 +9,11 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 - Electronのメインプロセスで透明・フレームレス・常時前面のBrowserWindowをディスプレイごとに作成します。
 - レンダラーは素のHTML/CSS/JavaScript/Canvasで構成し、React等の重いUIフレームワークは入れていません。
 - 通常時はクリック透過を有効化し、操作モード中だけクリック可能にします。
-- Motion highlightは、各ディスプレイのscreen captureを低解像度で読み、前フレームとの差分から動きのある領域を推定して薄いハイライトを足します。メインスポットはマウス周辺に残します。
+- Motion highlightは、各ディスプレイのscreen captureを低解像度で読み、前フレームとの差分から動きのある領域を推定して短いハイライトを足します。メインスポットはマウス周辺に残します。
 - Ctrl単体の通常時操作は、非フォーカス/クリック透過との相性が悪いため安定要件から外し、`Ctrl+Shift+F` を安定操作として採用しました。
 - 通知は音・点滅・強いフラッシュを使わず、暗幕の透明度とフォーカス半径を1.6秒だけ緩く変化させます。
 - 2026-06-09時点で、トレイメニュー、軽量な設定保存、Motion highlightのオン/オフ、IPC sender検証、CSP、navigation/window.open制限を追加しています。
+- マウス周辺の体感は、暗幕を強くするよりも、中心の自然な抜け、広いグラデーション境界、軽い追従スムージングで作ります。周辺視は探索や変化検出にも重要なため、デフォルトは強い暗転ではなく控えめな減光にしています。
 
 ## 比較
 
@@ -34,7 +35,7 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 - `src/preload.js`: contextBridge経由で安全に操作モードAPIを公開。
 - `src/renderer/`: Canvas描画、ポモドーロ、タイマーUI、通知演出。
 
-設定はメインプロセスを単一ソースにし、ElectronのuserData配下の `settings.json` へ保存します。対象は暗幕の透明度、スポット半径、Focus/Break分数、Motion highlight、Overlay enabledです。smoke実行時は保存を無効化し、検証結果がユーザー設定に影響しないようにしています。
+設定はメインプロセスを単一ソースにし、ElectronのuserData配下の `settings.json` へ保存します。対象は暗幕の透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Overlay enabledです。smoke実行時は保存を無効化し、検証結果がユーザー設定に影響しないようにしています。
 
 IPCはoverlay windowかつ `renderer/index.html` からのsenderだけを受け付けます。timer commandは `start`、`pause`、`reset` のallowlistで検証します。rendererにはCSPを設定し、外部navigationと `window.open` は拒否します。
 
@@ -89,7 +90,9 @@ Windows仮想デスクトップはElectron標準APIだけで「全デスクト�
 
 ### 水面とフォーカスライト
 
-暗幕は黒14%を基準に全面へ描画します。その後、マウス周辺に半径215px前後のradial gradientを `destination-out` で抜き、背面を柔らかく見せます。動きがある領域には別レイヤーで薄いglowを足します。メインの明るい円はmotion側へ移動させません。
+暗幕は黒16%を基準に全面へ描画します。その後、マウス周辺に半径245px前後のradial gradientを `destination-out` で抜き、背面を柔らかく見せます。中心は以前より自然に抜き、境界は `spotlightSoftness` で広くぼかします。マウス座標はtargetと描画位置を分け、軽く補間して急な追従感を減らします。
+
+動きがある領域には、暗幕をわずかに抜く小さい芯と、薄い青緑の広いハローを短時間だけ足します。メインの明るい円はmotion側へ移動させません。マウス移動直後はマウススポットを主役にし、motion highlightは少し抑えます。
 
 水面は低アルファの緑青系ラインと、数秒おきに広がる薄い波紋で表現しています。波紋は最大6個までに制限し、描画負荷と視覚的な主張を抑えています。単色テーマに寄りすぎず、背面作業の可読性を損なわない範囲にしています。
 
@@ -101,10 +104,21 @@ Motion highlightは、ユーザーの視線そのものではなく「画面内�
 2. rendererで128x72pxへ縮小して前フレームとの差分を取る。
 3. 差分が十分あるピクセルを8x6のセルに集計する。
 4. 全体変化が大きすぎる場合はconfidenceを下げる。
-5. 強いセルを最大5個まで薄いハイライトとして保持する。
+5. 強いセルを最大3個まで短いハイライトとして保持する。
 6. 取得失敗時、低confidence時、動きが止まった後はハイライトだけ消える。マウススポットは維持する。
 
 この方式は入力キャレット位置の取得よりアプリ横断性が高く、Webカメラ視線推定より軽い一方で、動画・広告・ローディングなどにも反応します。そのためv0.1では実験機能として扱い、しきい値は実作業で調整する前提です。
+
+### 注意設計の根拠
+
+画面の一部を通常表示し周辺を抑えるUIは、注目先を作る補助としては有望です。一方で、周辺視は視覚探索や変化検出にも使われるため、強い暗転は検索、比較、監視、デバッグの妨げになり得ます。そのためFocus Veilでは、周辺を消すのではなく控えめに減光し、境界を柔らかくし、必要に応じてOverlay enabledやVeil Strengthで弱められる設計にしています。
+
+参考:
+
+- Spotlight UI: https://www.research.autodesk.com/publications/spotlight-directing-users-attention-on-large-displays/
+- 周辺視と視覚探索: https://www.nature.com/articles/s44159-022-00097-1
+- 周辺視喪失と探索性能: https://pmc.ncbi.nlm.nih.gov/articles/PMC8287039/
+- 注意とコントラスト感度: https://pmc.ncbi.nlm.nih.gov/articles/PMC4280203/
 
 ### 通知演出
 

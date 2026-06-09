@@ -16,8 +16,9 @@ const motionFocusEnabled = true;
 const defaultSettings = {
   veilEnabled: true,
   motionEnabled: initialMotionEnabled,
-  veilAlpha: 0.14,
-  spotlightRadius: 215,
+  veilAlpha: 0.16,
+  spotlightRadius: 245,
+  spotlightSoftness: 0.68,
   workMinutes: 25,
   breakMinutes: 5
 };
@@ -31,6 +32,10 @@ const state = {
   controlHoldMode: false,
   mouseX: window.innerWidth / 2,
   mouseY: window.innerHeight / 2,
+  spotX: window.innerWidth / 2,
+  spotY: window.innerHeight / 2,
+  lastMouseMoveAt: performance.now(),
+  lastSpotUpdate: performance.now(),
   motionHighlights: [],
   motionStatus: initialMotionEnabled ? 'starting' : 'disabled',
   settings: { ...defaultSettings },
@@ -183,22 +188,23 @@ function drawRippleField(width, height, now, pulse) {
 function drawMotionHighlights(now) {
   state.motionHighlights = state.motionHighlights.filter((highlight) => {
     const age = now - highlight.updatedAt;
-    highlight.strength *= age > 700 ? 0.9 : 0.965;
-    return age < 2200 && highlight.strength > 0.035;
+    return age < 1800 && highlight.strength > 0.035;
   });
 
   if (state.motionHighlights.length === 0) {
     return;
   }
 
-  context.save();
-  context.globalCompositeOperation = 'source-over';
+  const mouseIdleFactor = clamp((now - state.lastMouseMoveAt - 450) / 900, 0.58, 1);
+  const visibleHighlights = state.motionHighlights.slice(0, 3);
 
-  for (const highlight of state.motionHighlights) {
-    const age = now - highlight.updatedAt;
-    const alpha = clamp(highlight.strength * (1 - age / 2600), 0, 1);
-    const radius = 130 + highlight.strength * 95;
-    const glow = context.createRadialGradient(
+  context.save();
+  context.globalCompositeOperation = 'destination-out';
+
+  for (const highlight of visibleHighlights) {
+    const alpha = getMotionEnvelope(highlight, now) * highlight.strength * mouseIdleFactor;
+    const radius = 150 + highlight.strength * 120;
+    const reveal = context.createRadialGradient(
       highlight.x,
       highlight.y,
       0,
@@ -206,17 +212,106 @@ function drawMotionHighlights(now) {
       highlight.y,
       radius
     );
-    glow.addColorStop(0, `rgba(223, 250, 241, ${(alpha * 0.055).toFixed(3)})`);
-    glow.addColorStop(0.48, `rgba(184, 225, 216, ${(alpha * 0.03).toFixed(3)})`);
-    glow.addColorStop(1, 'rgba(184, 225, 216, 0)');
+    reveal.addColorStop(0, `rgba(0, 0, 0, ${(alpha * 0.16).toFixed(3)})`);
+    reveal.addColorStop(0.42, `rgba(0, 0, 0, ${(alpha * 0.08).toFixed(3)})`);
+    reveal.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-    context.fillStyle = glow;
+    context.fillStyle = reveal;
     context.beginPath();
     context.arc(highlight.x, highlight.y, radius, 0, Math.PI * 2);
     context.fill();
   }
 
+  context.globalCompositeOperation = 'source-over';
+
+  for (const highlight of visibleHighlights) {
+    const alpha = getMotionEnvelope(highlight, now) * highlight.strength * mouseIdleFactor;
+    const coreRadius = 58 + highlight.strength * 46;
+    const haloRadius = 180 + highlight.strength * 105;
+    const halo = context.createRadialGradient(
+      highlight.x,
+      highlight.y,
+      0,
+      highlight.x,
+      highlight.y,
+      haloRadius
+    );
+    halo.addColorStop(0, `rgba(226, 252, 244, ${(alpha * 0.095).toFixed(3)})`);
+    halo.addColorStop(0.32, `rgba(172, 224, 213, ${(alpha * 0.042).toFixed(3)})`);
+    halo.addColorStop(1, 'rgba(172, 224, 213, 0)');
+
+    context.fillStyle = halo;
+    context.beginPath();
+    context.arc(highlight.x, highlight.y, haloRadius, 0, Math.PI * 2);
+    context.fill();
+
+    const core = context.createRadialGradient(
+      highlight.x,
+      highlight.y,
+      0,
+      highlight.x,
+      highlight.y,
+      coreRadius
+    );
+    core.addColorStop(0, `rgba(246, 255, 249, ${(alpha * 0.09).toFixed(3)})`);
+    core.addColorStop(1, 'rgba(246, 255, 249, 0)');
+
+    context.fillStyle = core;
+    context.beginPath();
+    context.arc(highlight.x, highlight.y, coreRadius, 0, Math.PI * 2);
+    context.fill();
+  }
+
   context.restore();
+}
+
+function getMotionEnvelope(highlight, now) {
+  const sinceCreated = now - (highlight.createdAt ?? highlight.updatedAt);
+  const sinceUpdated = now - highlight.updatedAt;
+  const attack = clamp(sinceCreated / 120, 0, 1);
+
+  if (sinceUpdated < 340) {
+    return attack;
+  }
+
+  return attack * clamp(1 - (sinceUpdated - 340) / 1150, 0, 1);
+}
+
+function buildSpotlightParams(pulse) {
+  const softness = state.settings.spotlightSoftness;
+  const radius =
+    state.settings.spotlightRadius + (state.operationMode ? 36 : 0) + pulse * 86;
+  const coreStop = clamp(0.15 + (1 - softness) * 0.17, 0.14, 0.32);
+  const shoulderStop = clamp(0.46 + softness * 0.26, 0.52, 0.78);
+  const centerClear = clamp(0.64 + state.settings.veilAlpha * 1.15, 0.66, 0.9);
+
+  return {
+    veilAlpha: Math.max(0.02, state.settings.veilAlpha - pulse * 0.055),
+    radius,
+    coreStop,
+    shoulderStop,
+    centerClear,
+    shoulderClear: clamp(centerClear * (0.28 + softness * 0.18), 0.28, 0.46),
+    glowRadius: radius * (0.84 + softness * 0.18),
+    glowAlpha: 0.02 + pulse * 0.026
+  };
+}
+
+function updateSpotPosition(now) {
+  const elapsed = clamp(now - state.lastSpotUpdate, 1, 64);
+  const distance = Math.hypot(state.mouseX - state.spotX, state.mouseY - state.spotY);
+  const responseMs = now - state.lastMouseMoveAt < 180 ? 72 : 118;
+  const blend = distance > 420 ? 1 : 1 - Math.exp(-elapsed / responseMs);
+
+  state.spotX += (state.mouseX - state.spotX) * blend;
+  state.spotY += (state.mouseY - state.spotY) * blend;
+
+  if (distance < 0.35) {
+    state.spotX = state.mouseX;
+    state.spotY = state.mouseY;
+  }
+
+  state.lastSpotUpdate = now;
 }
 
 function drawVeil(now = performance.now()) {
@@ -229,51 +324,56 @@ function drawVeil(now = performance.now()) {
   }
 
   const pulse = getNotificationPulse(now);
-  const veilAlpha = Math.max(0.02, state.settings.veilAlpha - pulse * 0.055);
-  const baseRadius = state.settings.spotlightRadius + (state.operationMode ? 45 : 0);
-  const radius = baseRadius + pulse * 90;
+  const spotlight = buildSpotlightParams(pulse);
 
   context.clearRect(0, 0, width, height);
 
-  context.fillStyle = `rgba(0, 0, 0, ${veilAlpha.toFixed(3)})`;
+  context.fillStyle = `rgba(0, 0, 0, ${spotlight.veilAlpha.toFixed(3)})`;
   context.fillRect(0, 0, width, height);
 
   const gradient = context.createRadialGradient(
-    state.mouseX,
-    state.mouseY,
+    state.spotX,
+    state.spotY,
     20,
-    state.mouseX,
-    state.mouseY,
-    radius
+    state.spotX,
+    state.spotY,
+    spotlight.radius
   );
-  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.48)');
-  gradient.addColorStop(0.56, 'rgba(0, 0, 0, 0.23)');
+  gradient.addColorStop(0, `rgba(0, 0, 0, ${spotlight.centerClear.toFixed(3)})`);
+  gradient.addColorStop(
+    spotlight.coreStop,
+    `rgba(0, 0, 0, ${(spotlight.centerClear * 0.92).toFixed(3)})`
+  );
+  gradient.addColorStop(
+    spotlight.shoulderStop,
+    `rgba(0, 0, 0, ${spotlight.shoulderClear.toFixed(3)})`
+  );
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
   context.globalCompositeOperation = 'destination-out';
   context.fillStyle = gradient;
   context.beginPath();
-  context.arc(state.mouseX, state.mouseY, radius, 0, Math.PI * 2);
+  context.arc(state.spotX, state.spotY, spotlight.radius, 0, Math.PI * 2);
   context.fill();
   context.globalCompositeOperation = 'source-over';
 
   const glow = context.createRadialGradient(
-    state.mouseX,
-    state.mouseY,
+    state.spotX,
+    state.spotY,
     0,
-    state.mouseX,
-    state.mouseY,
-    radius * 0.82
+    state.spotX,
+    state.spotY,
+    spotlight.glowRadius
   );
   glow.addColorStop(
     0,
-    `rgba(226, 248, 241, ${(0.03 + pulse * 0.03).toFixed(3)})`
+    `rgba(226, 248, 241, ${spotlight.glowAlpha.toFixed(3)})`
   );
-  glow.addColorStop(0.6, 'rgba(186, 226, 216, 0.018)');
+  glow.addColorStop(0.58, 'rgba(186, 226, 216, 0.014)');
   glow.addColorStop(1, 'rgba(186, 226, 216, 0)');
   context.fillStyle = glow;
   context.beginPath();
-  context.arc(state.mouseX, state.mouseY, radius * 0.82, 0, Math.PI * 2);
+  context.arc(state.spotX, state.spotY, spotlight.glowRadius, 0, Math.PI * 2);
   context.fill();
 
   drawMotionHighlights(now);
@@ -283,6 +383,7 @@ function drawVeil(now = performance.now()) {
 let lastDraw = 0;
 
 function animationLoop(now) {
+  updateSpotPosition(now);
   sampleMotionFocus(now);
 
   if (now - lastDraw >= 32) {
@@ -310,7 +411,7 @@ function updateTimerUi() {
 function triggerNotification() {
   state.notificationUntil = performance.now() + 1600;
   const now = performance.now();
-  addRipple(now, state.mouseX, state.mouseY, 1.15);
+  addRipple(now, state.spotX, state.spotY, 1.15);
 }
 
 function applyTimerState(timerState) {
@@ -344,6 +445,13 @@ function normalizeSettings(candidate = {}) {
     veilAlpha: clamp(Number(candidate.veilAlpha) || defaultSettings.veilAlpha, 0.04, 0.3),
     spotlightRadius: Math.round(
       clamp(Number(candidate.spotlightRadius) || defaultSettings.spotlightRadius, 140, 360)
+    ),
+    spotlightSoftness: Number(
+      clamp(
+        Number(candidate.spotlightSoftness) || defaultSettings.spotlightSoftness,
+        0.35,
+        0.9
+      ).toFixed(2)
     ),
     workMinutes: Math.round(
       clamp(Number(candidate.workMinutes) || defaultSettings.workMinutes, 1, 180)
@@ -399,12 +507,19 @@ function applySettings(settingsPatch = {}) {
 }
 
 let settingsUpdateTimer = null;
+let pendingSettingsPatch = {};
 
 function requestSettingsUpdate(patch) {
   applySettings(patch);
+  pendingSettingsPatch = {
+    ...pendingSettingsPatch,
+    ...patch
+  };
   clearTimeout(settingsUpdateTimer);
   settingsUpdateTimer = setTimeout(() => {
-    window.focusVeil?.updateSettings(patch).catch(() => {
+    const nextPatch = pendingSettingsPatch;
+    pendingSettingsPatch = {};
+    window.focusVeil?.updateSettings(nextPatch).catch(() => {
       window.focusVeil?.getMainState().then((mainState) => {
         applySettings(mainState.settings);
       });
@@ -422,6 +537,8 @@ function getPublicState() {
     operationMode: state.operationMode,
     mouseX: Number(state.mouseX.toFixed(1)),
     mouseY: Number(state.mouseY.toFixed(1)),
+    spotX: Number(state.spotX.toFixed(1)),
+    spotY: Number(state.spotY.toFixed(1)),
     motionStatus: state.motionStatus,
     motionHighlightCount: state.motionHighlights.length,
     motionStrongestX: Number(strongestHighlight.x.toFixed(1)),
@@ -459,12 +576,12 @@ function updateMotionHighlights(points, now = performance.now()) {
       nearest.strength = Math.max(nearest.strength, strength);
       nearest.updatedAt = now;
     } else {
-      state.motionHighlights.push({ x, y, strength, updatedAt: now });
+      state.motionHighlights.push({ x, y, strength, createdAt: now, updatedAt: now });
     }
   }
 
   state.motionHighlights.sort((a, b) => b.strength - a.strength);
-  state.motionHighlights = state.motionHighlights.slice(0, 5);
+  state.motionHighlights = state.motionHighlights.slice(0, 3);
 }
 
 function sampleMotionFocus(now) {
@@ -654,6 +771,7 @@ window.addEventListener('resize', resizeCanvas);
 window.addEventListener('mousemove', (event) => {
   state.mouseX = event.clientX;
   state.mouseY = event.clientY;
+  state.lastMouseMoveAt = performance.now();
 });
 
 window.addEventListener('keydown', (event) => {
@@ -710,6 +828,9 @@ if (isSmoke) {
     setMouse(x, y) {
       state.mouseX = x;
       state.mouseY = y;
+      state.spotX = x;
+      state.spotY = y;
+      state.lastMouseMoveAt = performance.now();
       return getPublicState();
     },
     simulateMotion(x, y, strength = 0.8) {
@@ -723,6 +844,11 @@ if (isSmoke) {
     },
     triggerNotification() {
       triggerNotification();
+      return getPublicState();
+    },
+    async setSettings(patch) {
+      applySettings(patch);
+      await window.focusVeil?.updateSettings(patch);
       return getPublicState();
     }
   };
