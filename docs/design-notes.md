@@ -27,6 +27,26 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 | 通知 | 暗幕がふわっと開く | 点滅、白フラッシュ、音 | 集中を強く断ち切らないため |
 | 常駐操作 | トレイ + 操作モード内設定 | 常時表示の大きな設定画面 | 通常時の作業画面を邪魔しないまま、復旧と終了の導線を確保するため |
 
+## Next Feature Design
+
+次フェーズでは、`Focus Profiles`、`Ambient Progress`、`Gentle Breaks` を追加候補として設計済みです。詳細な設計値と実装順序は `docs/feature-design-todo.md`、研究との接続は `docs/research-connections.md` に分離しています。
+
+### Focus Profiles
+
+`Code`、`Read`、`Write`、`Scan` の4Profileを採用します。Profileは単なるラベルではなく、暗幕、スポットライト半径、境界の柔らかさ、形状、追従速度、motion highlight強度、Ambient Progress強度をまとめて切り替えるプリセットです。
+
+既存ユーザーの体感を崩さないため、新しい設定キーがない場合は `focusProfile: "custom"` として読み、現在の `veilAlpha`、`spotlightRadius`、`spotlightSoftness` を維持します。Profile選択時だけpreset値を適用し、手動でスライダーを動かした場合は `custom` に戻します。
+
+### Ambient Progress
+
+タイマー情報は、通常時に大きく読ませるのではなく、全ディスプレイ下端の細い進捗ラインで控えめに提示します。強度は `off`、`subtle`、`visible` の3段階です。操作モードでは正確な残り時間を引き続き表示し、通常時の右下タイマーはAmbient Progress有効時に控えめなopacityへ落とします。
+
+### Gentle Breaks
+
+固定タイマーは廃止しません。`25分集中 -> 5分休憩` のような目安は残し、Focus終了時にユーザーが操作中なら休憩通知だけを短く保留します。区切り判定にはElectron公式APIの `powerMonitor.getSystemIdleTime()` を使い、ネイティブキーボードフックは追加しません。
+
+初期値は、アイドル判定8秒、静かな猶予30秒、最大延長5分です。強制ロック、中央モーダル、音、点滅は採用せず、Ambient Progressや既存の静かな通知演出で休憩への移行を促します。
+
 ## 具体例
 
 ### Electron構成
