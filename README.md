@@ -32,6 +32,15 @@ npm run smoke
 - 設定保存: 透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Overlay enabledはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。
 - Ctrl単体: Electronウィンドウにフォーカスがある場合のみベストエフォートで反応します。通常のクリック透過状態では背面作業を優先するため、安定操作は `Ctrl+Shift+F` に寄せています。
 
+## ドキュメント
+
+- 利用者向け説明書: `docs/user-guide.md`
+- 常時起動時の負荷メモ: `docs/performance-notes.md`
+- 設計ノート: `docs/design-notes.md`
+- 検証ログ: `docs/verification-log.md`
+- 次フェーズ機能設計: `docs/feature-design-todo.md`
+- 研究との接続: `docs/research-connections.md`
+
 ## 設計方針
 
 - React等のUIフレームワークは使わず、Electron + HTML/CSS/JavaScript/Canvasで構成しています。
