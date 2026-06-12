@@ -41,6 +41,7 @@ let controlWindowShown = false;
 let rebuildingOverlays = false;
 let settings = { ...defaultSettings };
 let settingsSaveTimer = null;
+let timerBroadcastInterval = null;
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
@@ -304,6 +305,29 @@ function broadcastTimerState(source = 'main') {
   }
 }
 
+function stopTimerBroadcastInterval() {
+  if (!timerBroadcastInterval) {
+    return;
+  }
+
+  clearInterval(timerBroadcastInterval);
+  timerBroadcastInterval = null;
+}
+
+function startTimerBroadcastInterval() {
+  if (timerBroadcastInterval) {
+    return;
+  }
+
+  timerBroadcastInterval = setInterval(() => {
+    broadcastTimerState('tick');
+
+    if (!timerState.running) {
+      stopTimerBroadcastInterval();
+    }
+  }, 250);
+}
+
 function handleTimerCommand(action) {
   if (!timerActions.has(action)) {
     throw new Error(`Unsupported timer action: ${action}`);
@@ -320,6 +344,12 @@ function handleTimerCommand(action) {
     timerState.running = false;
     timerState.remaining = getTimerDuration(timerState.phase);
     timerState.lastTick = Date.now();
+  }
+
+  if (timerState.running) {
+    startTimerBroadcastInterval();
+  } else {
+    stopTimerBroadcastInterval();
   }
 
   broadcastTimerState(`timer:${action}`);
@@ -883,7 +913,17 @@ function maintainOverlayPresence() {
   }
 
   for (const win of windows) {
-    win.setAlwaysOnTop(true, 'screen-saver');
+    const needsVisibilityRestore = !win.isVisible();
+    const needsTopRestore = typeof win.isAlwaysOnTop === 'function' && !win.isAlwaysOnTop();
+
+    if (!needsVisibilityRestore && !needsTopRestore) {
+      continue;
+    }
+
+    if (needsTopRestore) {
+      win.setAlwaysOnTop(true, 'screen-saver');
+    }
+
     win.showInactive();
   }
 }
@@ -982,7 +1022,6 @@ app.whenReady().then(async () => {
   screen.on('display-removed', () => rebuildOverlayWindows('display-removed'));
   screen.on('display-metrics-changed', () => rebuildOverlayWindows('display-metrics-changed'));
 
-  setInterval(() => broadcastTimerState('tick'), 250);
   setInterval(maintainOverlayPresence, 2500);
 });
 
@@ -997,6 +1036,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  stopTimerBroadcastInterval();
   globalShortcut.unregisterAll();
 });
 

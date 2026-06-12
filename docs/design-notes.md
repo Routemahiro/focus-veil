@@ -103,10 +103,11 @@ Windows仮想デスクトップはElectron標準APIだけで「全デスクト�
 ### 軽量化
 
 - Canvasは各ディスプレイのoverlay windowごとに1枚だけです。
-- 描画は `requestAnimationFrame` 内で約30fpsに制限しています。
+- 描画はactive/idleの2段階です。マウス移動直後、スポット未収束、通知演出中、操作モード中、motion highlight表示中は約30fpsで描画し、静止アイドル時は約10fpsへ落とします。
 - 水面は低密度の線描画だけで、WebGL、粒子、大量DOMを使っていません。
-- タイマー更新は100ms間隔ですが、表示は秒単位で、処理は単純な減算だけです。
-- Motion highlightは各ディスプレイ128x72pxのサンプルに縮小し、最大10fpsで差分を見るだけです。大きすぎる全体変化はconfidenceを下げ、動画やスクロールに引っ張られすぎないようにしています。
+- タイマーIPCは、タイマー実行中だけ250ms間隔で送ります。停止中は操作や設定変更などの状態変化時だけ送ります。
+- Overlay disabled時はCanvasを1回clearし、描画ループとMotion captureを停止します。タイマーUIと復帰導線は維持します。
+- Motion highlightは各ディスプレイ128x72pxのサンプルに縮小し、約320ms間隔で差分を見ます。capture入力は最大5fpsです。大きすぎる全体変化はconfidenceを下げ、動画やスクロールに引っ張られすぎないようにしています。
 
 ### 水面とフォーカスライト
 

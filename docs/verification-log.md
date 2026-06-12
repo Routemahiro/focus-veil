@@ -1,5 +1,37 @@
 # Verification Log
 
+## 2026-06-12
+
+### Phase 1軽量化
+
+- rendererの描画ループをactive/idleに分け、静止アイドル時は約10fpsへ落とす構成に変更。
+- Motion highlightのcapture入力を最大5fpsへ下げ、差分サンプリングを約320ms間隔へ変更。
+- Overlay disabled時にCanvas描画ループとMotion captureを停止するよう変更。
+- timer tick IPCを、タイマーrunning中だけ250ms間隔で送る構成へ変更。
+- overlay presence維持処理を、不可視またはalways-on-topが外れたwindowだけに実行するよう条件化。
+
+#### 実行コマンド
+
+| コマンド | 結果 | メモ |
+| --- | --- | --- |
+| `node --check src/main.js` | 成功 | 構文OK |
+| `node --check src/preload.js` | 成功 | 構文OK |
+| `node --check src/renderer/renderer.js` | 成功 | 構文OK |
+| `npm run smoke` | 成功 | `artifacts/smoke-report.json` は `status: passed` |
+| 通常起動 | 成功 | READY 2件、stderr空 |
+| Motion ON idle 30秒測定 x2 | 成功 | 全論理CPU比1.769%、1.275% |
+| Overlay disabled 30秒測定 | 成功 | 全論理CPU比0.010% |
+
+#### 負荷測定
+
+| 条件 | 時間 | CPU 全論理CPU比 | CPU 1コア換算 | Working Set | Private Memory |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Phase 1後 Motion ON idle | 30秒 | 1.769% | 28.30% | 1043.4MB | 452.9MB |
+| Phase 1後 Motion ON idle | 30秒 | 1.275% | 20.40% | 1049.1MB | 454.7MB |
+| Phase 1後 Overlay disabled | 30秒 | 0.010% | 0.16% | 407.3MB | 339.8MB |
+
+測定はFocus Veil配下のElectronプロセスだけを `Path -like '*FocusVeil*'` で絞って行いました。Overlay disabled測定では、Electron userData配下の `settings.json` を一時的に変更し、測定後に元の設定へ復元しました。
+
 ## 2026-06-09
 
 ### Spotlight体感調整

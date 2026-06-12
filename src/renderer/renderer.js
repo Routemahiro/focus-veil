@@ -26,6 +26,10 @@ const durations = {
   work: isSmoke ? 4 : 25 * 60,
   break: isSmoke ? 2 : 5 * 60
 };
+const activeDrawInterval = 32;
+const idleDrawInterval = 100;
+const activeAfterInputMs = 1500;
+const motionSampleInterval = 320;
 
 const state = {
   operationMode: false,
@@ -87,6 +91,7 @@ function resizeCanvas() {
 function setOperationMode(enabled) {
   state.operationMode = enabled;
   body.classList.toggle('operation-mode', enabled);
+  requestActiveFrame(500);
 }
 
 function getNotificationPulse(now) {
@@ -381,17 +386,110 @@ function drawVeil(now = performance.now()) {
 }
 
 let lastDraw = 0;
+let animationFrameId = null;
+let animationTimeoutId = null;
+let forceActiveUntil = 0;
+
+function clearVeilCanvas() {
+  context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  lastDraw = performance.now();
+}
+
+function hasVisibleMotionHighlight(now) {
+  return state.motionHighlights.some((highlight) => {
+    const age = now - highlight.updatedAt;
+    return age < 1800 && highlight.strength > 0.035;
+  });
+}
+
+function isActiveAnimationState(now) {
+  if (!state.settings.veilEnabled) {
+    return false;
+  }
+
+  const spotDistance = Math.hypot(state.mouseX - state.spotX, state.mouseY - state.spotY);
+
+  return (
+    now - state.lastMouseMoveAt < activeAfterInputMs ||
+    spotDistance > 0.5 ||
+    hasVisibleMotionHighlight(now) ||
+    now < state.notificationUntil ||
+    now < forceActiveUntil ||
+    state.operationMode
+  );
+}
+
+function cancelAnimationSchedule() {
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+
+  if (animationTimeoutId !== null) {
+    clearTimeout(animationTimeoutId);
+    animationTimeoutId = null;
+  }
+}
+
+function scheduleAnimationLoop(active = false) {
+  if (!state.settings.veilEnabled || animationFrameId !== null || animationTimeoutId !== null) {
+    return;
+  }
+
+  if (active) {
+    animationFrameId = requestAnimationFrame(animationLoop);
+    return;
+  }
+
+  animationTimeoutId = setTimeout(() => {
+    animationTimeoutId = null;
+    animationFrameId = requestAnimationFrame(animationLoop);
+  }, idleDrawInterval);
+}
+
+function requestActiveFrame(duration = 250) {
+  forceActiveUntil = Math.max(forceActiveUntil, performance.now() + duration);
+
+  if (!state.settings.veilEnabled) {
+    return;
+  }
+
+  if (animationTimeoutId !== null) {
+    clearTimeout(animationTimeoutId);
+    animationTimeoutId = null;
+  }
+
+  scheduleAnimationLoop(true);
+}
+
+function startAnimationLoop(active = true) {
+  if (!state.settings.veilEnabled) {
+    return;
+  }
+
+  scheduleAnimationLoop(active);
+}
 
 function animationLoop(now) {
+  animationFrameId = null;
+
+  if (!state.settings.veilEnabled) {
+    clearVeilCanvas();
+    return;
+  }
+
   updateSpotPosition(now);
   sampleMotionFocus(now);
 
-  if (now - lastDraw >= 32) {
+  const active = isActiveAnimationState(now);
+  const drawInterval = active ? activeDrawInterval : idleDrawInterval;
+
+  if (now - lastDraw >= drawInterval) {
     drawVeil(now);
     lastDraw = now;
   }
 
-  requestAnimationFrame(animationLoop);
+  scheduleAnimationLoop(active);
 }
 
 function requestOperationMode(enabled) {
@@ -412,6 +510,7 @@ function triggerNotification() {
   state.notificationUntil = performance.now() + 1600;
   const now = performance.now();
   addRipple(now, state.spotX, state.spotY, 1.15);
+  requestActiveFrame(1700);
 }
 
 function applyTimerState(timerState) {
@@ -430,6 +529,7 @@ function applyTimerState(timerState) {
   }
 
   updateTimerUi();
+  requestActiveFrame(90);
 }
 
 function normalizeSettings(candidate = {}) {
@@ -483,27 +583,47 @@ function applySettings(settingsPatch = {}) {
     ...settingsPatch
   });
   const motionWasEnabled = state.settings.motionEnabled;
+  const veilWasEnabled = state.settings.veilEnabled;
   state.settings = nextSettings;
   body.classList.toggle('overlay-disabled', !state.settings.veilEnabled);
   syncSettingsControls();
+
+  if (!state.settings.veilEnabled) {
+    state.motionHighlights = [];
+    motionCapture.enabled = false;
+    state.motionStatus = state.settings.motionEnabled ? 'paused' : 'disabled';
+    stopMotionCapture();
+    cancelAnimationSchedule();
+    clearVeilCanvas();
+    return;
+  }
+
+  if (!veilWasEnabled) {
+    lastDraw = 0;
+    startAnimationLoop(true);
+  }
 
   if (!state.settings.motionEnabled) {
     motionCapture.enabled = false;
     state.motionHighlights = [];
     state.motionStatus = 'disabled';
     stopMotionCapture();
+    requestActiveFrame(500);
     return;
   }
 
   motionCapture.enabled = motionFocusEnabled;
   if (!motionFocusEnabled) {
     state.motionStatus = 'disabled';
+    requestActiveFrame(500);
     return;
   }
 
   if (!motionWasEnabled || !motionCapture.stream) {
     startMotionCapture();
   }
+
+  requestActiveFrame(500);
 }
 
 let settingsUpdateTimer = null;
@@ -582,10 +702,17 @@ function updateMotionHighlights(points, now = performance.now()) {
 
   state.motionHighlights.sort((a, b) => b.strength - a.strength);
   state.motionHighlights = state.motionHighlights.slice(0, 3);
+  requestActiveFrame(650);
 }
 
 function sampleMotionFocus(now) {
-  if (!motionCapture.available || !motionCapture.video || now - motionCapture.lastSample < 160) {
+  if (
+    !state.settings.veilEnabled ||
+    !motionCapture.enabled ||
+    !motionCapture.available ||
+    !motionCapture.video ||
+    now - motionCapture.lastSample < motionSampleInterval
+  ) {
     return;
   }
 
@@ -689,6 +816,11 @@ async function startMotionCapture() {
     return;
   }
 
+  if (!state.settings.veilEnabled) {
+    state.motionStatus = motionCapture.enabled ? 'paused' : 'disabled';
+    return;
+  }
+
   if (!motionCapture.enabled || !navigator.mediaDevices?.getUserMedia) {
     state.motionStatus = motionCapture.enabled ? 'unavailable' : 'disabled';
     return;
@@ -701,6 +833,11 @@ async function startMotionCapture() {
       return;
     }
 
+    if (!state.settings.veilEnabled || !motionCapture.enabled) {
+      state.motionStatus = state.settings.veilEnabled ? 'disabled' : 'paused';
+      return;
+    }
+
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
@@ -709,7 +846,7 @@ async function startMotionCapture() {
           chromeMediaSourceId: source.id,
           maxWidth: 640,
           maxHeight: 360,
-          maxFrameRate: 10
+          maxFrameRate: 5
         }
       }
     });
@@ -719,6 +856,14 @@ async function startMotionCapture() {
     video.playsInline = true;
     video.srcObject = stream;
     await video.play();
+
+    if (!state.settings.veilEnabled || !motionCapture.enabled) {
+      for (const track of stream.getTracks()) {
+        track.stop();
+      }
+      state.motionStatus = state.settings.veilEnabled ? 'disabled' : 'paused';
+      return;
+    }
 
     motionCapture.stream = stream;
     motionCapture.video = video;
@@ -766,12 +911,17 @@ settingsControls?.addEventListener('change', (event) => {
   requestSettingsUpdate({ [key]: value });
 });
 
-window.addEventListener('resize', resizeCanvas);
+window.addEventListener('resize', () => {
+  resizeCanvas();
+  lastDraw = 0;
+  requestActiveFrame(500);
+});
 
 window.addEventListener('mousemove', (event) => {
   state.mouseX = event.clientX;
   state.mouseY = event.clientY;
   state.lastMouseMoveAt = performance.now();
+  requestActiveFrame(activeAfterInputMs);
 });
 
 window.addEventListener('keydown', (event) => {
@@ -831,6 +981,7 @@ if (isSmoke) {
       state.spotX = x;
       state.spotY = y;
       state.lastMouseMoveAt = performance.now();
+      requestActiveFrame(500);
       return getPublicState();
     },
     simulateMotion(x, y, strength = 0.8) {
@@ -858,4 +1009,4 @@ resizeCanvas();
 updateTimerUi();
 syncSettingsControls();
 startMotionCapture();
-requestAnimationFrame(animationLoop);
+startAnimationLoop(true);
