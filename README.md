@@ -36,6 +36,7 @@ npm run smoke
 
 - 利用者向け説明書: `docs/user-guide.md`
 - 常時起動時の負荷メモ: `docs/performance-notes.md`
+- 軽量化実装TODO: `docs/performance-optimization-todo.md`
 - 設計ノート: `docs/design-notes.md`
 - 検証ログ: `docs/verification-log.md`
 - 次フェーズ機能設計: `docs/feature-design-todo.md`
