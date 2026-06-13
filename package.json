@@ -18,5 +18,8 @@
   "license": "UNLICENSED",
   "devDependencies": {
     "electron": "41.7.0"
+  },
+  "dependencies": {
+    "koffi": "^3.0.2"
   }
 }

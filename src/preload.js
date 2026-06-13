@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('focusVeil', {
   getMainState: () => ipcRenderer.invoke('focus-veil:get-main-state'),
   setOperationMode: (enabled) =>
     ipcRenderer.invoke('focus-veil:set-operation-mode', Boolean(enabled)),
+  notifyCursorActivity: () => ipcRenderer.send('focus-veil:cursor-activity'),
   getCaptureSource: () => ipcRenderer.invoke('focus-veil:get-capture-source'),
   updateSettings: (patch) => ipcRenderer.invoke('focus-veil:update-settings', patch),
   timerCommand: (action) => ipcRenderer.invoke('focus-veil:timer-command', action),
@@ -22,5 +23,15 @@ contextBridge.exposeInMainWorld('focusVeil', {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('focus-veil:settings-state', listener);
     return () => ipcRenderer.removeListener('focus-veil:settings-state', listener);
+  },
+  onActiveDisplayChanged: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('focus-veil:active-display', listener);
+    return () => ipcRenderer.removeListener('focus-veil:active-display', listener);
+  },
+  onActiveWindowChanged: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('focus-veil:active-window', listener);
+    return () => ipcRenderer.removeListener('focus-veil:active-window', listener);
   }
 });

@@ -15,11 +15,22 @@ const {
 } = require('electron');
 
 const isSmoke = process.argv.includes('--smoke');
+let koffi = null;
+
+if (process.platform === 'win32' && !isSmoke) {
+  try {
+    koffi = require('koffi');
+  } catch (error) {
+    console.warn('Focus Veil: native window tracking unavailable.', error);
+  }
+}
+
 const smokeOutputDirectory = path.join(__dirname, '..', 'artifacts');
 const rendererEntryPath = path.join(__dirname, 'renderer', 'index.html');
 const rendererEntryUrl = pathToFileURL(rendererEntryPath).href;
 const settingsFileName = 'settings.json';
 const timerActions = new Set(['start', 'pause', 'reset']);
+const activeWindowPollIntervalMs = 250;
 const defaultSettings = {
   veilEnabled: true,
   motionEnabled: true,
@@ -42,6 +53,10 @@ let rebuildingOverlays = false;
 let settings = { ...defaultSettings };
 let settingsSaveTimer = null;
 let timerBroadcastInterval = null;
+let activeDisplayKey = null;
+let activeWindowPollInterval = null;
+let nativeWindowApi = null;
+let activeWindowPayloadSignature = '';
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
@@ -219,6 +234,26 @@ function getDisplayDescriptors() {
   }));
 }
 
+function getDisplayKey(display) {
+  return display ? `display-${display.id}` : null;
+}
+
+function getDisplayKeyForPoint(point) {
+  if (isSmoke) {
+    return getSmokeDescriptor().key;
+  }
+
+  return getDisplayKey(screen.getDisplayNearestPoint(point));
+}
+
+function detectActiveDisplayKey() {
+  if (isSmoke) {
+    return getSmokeDescriptor().key;
+  }
+
+  return getDisplayKeyForPoint(screen.getCursorScreenPoint());
+}
+
 function getOverlayList() {
   return [...overlayWindows.values()].filter((win) => !win.isDestroyed());
 }
@@ -229,6 +264,36 @@ function sendToWindow(win, channel, payload) {
   }
 
   win.webContents.send(channel, payload);
+}
+
+function broadcastActiveDisplay(source = 'main') {
+  const nextActiveDisplayKey = activeDisplayKey ?? detectActiveDisplayKey();
+  const payload = {
+    activeDisplayKey: nextActiveDisplayKey,
+    source
+  };
+
+  for (const win of getOverlayList()) {
+    sendToWindow(win, 'focus-veil:active-display', payload);
+  }
+}
+
+function setActiveDisplayKey(key, source = 'main', options = {}) {
+  if (!key || (!isSmoke && !overlayWindows.has(key))) {
+    return false;
+  }
+
+  if (!options.force && activeDisplayKey === key) {
+    return false;
+  }
+
+  activeDisplayKey = key;
+  broadcastActiveDisplay(source);
+  return true;
+}
+
+function refreshActiveDisplay(source = 'main', options = {}) {
+  return setActiveDisplayKey(detectActiveDisplayKey(), source, options);
 }
 
 function isTrustedRendererUrl(url) {
@@ -249,6 +314,266 @@ function assertTrustedIpcEvent(event) {
   }
 
   return senderWindow;
+}
+
+function getRectArea(rect) {
+  return Math.max(0, rect.width) * Math.max(0, rect.height);
+}
+
+function getRectIntersection(rect, bounds) {
+  const left = Math.max(rect.x, bounds.x);
+  const top = Math.max(rect.y, bounds.y);
+  const right = Math.min(rect.x + rect.width, bounds.x + bounds.width);
+  const bottom = Math.min(rect.y + rect.height, bounds.y + bounds.height);
+
+  if (right <= left || bottom <= top) {
+    return null;
+  }
+
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top
+  };
+}
+
+function roundRect(rect) {
+  if (!rect) {
+    return null;
+  }
+
+  return {
+    x: Math.round(rect.x),
+    y: Math.round(rect.y),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height)
+  };
+}
+
+function nativeHandleToBigInt(handle) {
+  if (typeof handle === 'bigint') {
+    return handle;
+  }
+
+  if (typeof handle === 'number') {
+    return BigInt(handle);
+  }
+
+  if (!Buffer.isBuffer(handle) || handle.length === 0) {
+    return null;
+  }
+
+  return handle.length >= 8 ? handle.readBigUInt64LE(0) : BigInt(handle.readUInt32LE(0));
+}
+
+function isOverlayNativeHandle(handle) {
+  const normalized = nativeHandleToBigInt(handle);
+  if (!normalized) {
+    return false;
+  }
+
+  return getOverlayList().some((win) => {
+    try {
+      return nativeHandleToBigInt(win.getNativeWindowHandle()) === normalized;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function getNativeWindowApi() {
+  if (nativeWindowApi !== null) {
+    return nativeWindowApi;
+  }
+
+  nativeWindowApi = false;
+
+  if (!koffi) {
+    return null;
+  }
+
+  try {
+    const rect = koffi.struct('RECT', {
+      left: 'long',
+      top: 'long',
+      right: 'long',
+      bottom: 'long'
+    });
+    const user32 = koffi.load('user32.dll');
+    const dwmapi = koffi.load('dwmapi.dll');
+
+    nativeWindowApi = {
+      rect,
+      getForegroundWindow: user32.func('void* __stdcall GetForegroundWindow()'),
+      getWindowRect: user32.func('bool __stdcall GetWindowRect(void* hWnd, _Out_ RECT* rect)'),
+      isWindowVisible: user32.func('bool __stdcall IsWindowVisible(void* hWnd)'),
+      isIconic: user32.func('bool __stdcall IsIconic(void* hWnd)'),
+      dwmGetWindowAttribute: dwmapi.func(
+        'long __stdcall DwmGetWindowAttribute(void* hwnd, uint32 attr, _Out_ RECT* rect, uint32 cb)'
+      )
+    };
+  } catch (error) {
+    nativeWindowApi = false;
+    console.warn('Focus Veil: failed to initialize native window tracking.', error);
+  }
+
+  return nativeWindowApi || null;
+}
+
+function win32RectToBounds(rect) {
+  const width = rect.right - rect.left;
+  const height = rect.bottom - rect.top;
+
+  if (width <= 12 || height <= 12) {
+    return null;
+  }
+
+  return {
+    x: rect.left,
+    y: rect.top,
+    width,
+    height
+  };
+}
+
+function getForegroundWindowDipRect() {
+  const api = getNativeWindowApi();
+  if (!api) {
+    return null;
+  }
+
+  try {
+    const hwnd = api.getForegroundWindow();
+    if (!hwnd || hwnd === 0n || isOverlayNativeHandle(hwnd)) {
+      return null;
+    }
+
+    if (!api.isWindowVisible(hwnd) || api.isIconic(hwnd)) {
+      return null;
+    }
+
+    const frameRect = {};
+    const frameResult = api.dwmGetWindowAttribute(hwnd, 9, frameRect, koffi.sizeof(api.rect));
+    const windowRect = {};
+    const usedRect =
+      frameResult === 0 && win32RectToBounds(frameRect)
+        ? frameRect
+        : api.getWindowRect(hwnd, windowRect)
+          ? windowRect
+          : null;
+    const physicalRect = usedRect ? win32RectToBounds(usedRect) : null;
+
+    if (!physicalRect) {
+      return null;
+    }
+
+    return roundRect(screen.screenToDipRect(null, physicalRect));
+  } catch (error) {
+    console.warn('Focus Veil: failed to read foreground window bounds.', error);
+    return null;
+  }
+}
+
+function isFullscreenLikeRect(rect, displayBounds) {
+  const intersection = getRectIntersection(rect, displayBounds);
+  if (!intersection) {
+    return false;
+  }
+
+  const displayArea = getRectArea(displayBounds);
+  const coverage = getRectArea(intersection) / Math.max(1, displayArea);
+  const nearlySameSize =
+    Math.abs(rect.width - displayBounds.width) <= 3 &&
+    Math.abs(rect.height - displayBounds.height) <= 3;
+
+  return coverage > 0.985 && nearlySameSize;
+}
+
+function getForegroundWindowRectsByDisplay() {
+  const foregroundRect = getForegroundWindowDipRect();
+  const rectsByDisplay = new Map();
+
+  if (!foregroundRect) {
+    return rectsByDisplay;
+  }
+
+  const matchingDisplay = screen.getDisplayMatching(foregroundRect);
+  if (isFullscreenLikeRect(foregroundRect, matchingDisplay.bounds)) {
+    return rectsByDisplay;
+  }
+
+  for (const display of screen.getAllDisplays()) {
+    const intersection = getRectIntersection(foregroundRect, display.bounds);
+    if (!intersection || getRectArea(intersection) < 900) {
+      continue;
+    }
+
+    rectsByDisplay.set(
+      getDisplayKey(display),
+      roundRect({
+        x: intersection.x - display.bounds.x,
+        y: intersection.y - display.bounds.y,
+        width: intersection.width,
+        height: intersection.height
+      })
+    );
+  }
+
+  return rectsByDisplay;
+}
+
+function getActiveWindowPayloadSignature(rectsByDisplay) {
+  return getOverlayList()
+    .map((win) => {
+      const rect = rectsByDisplay.get(win.focusVeilKey);
+      if (!rect) {
+        return `${win.focusVeilKey}:none`;
+      }
+
+      return `${win.focusVeilKey}:${rect.x},${rect.y},${rect.width},${rect.height}`;
+    })
+    .join('|');
+}
+
+function broadcastActiveWindowState(source = 'main', options = {}) {
+  const rectsByDisplay = getForegroundWindowRectsByDisplay();
+  const signature = getActiveWindowPayloadSignature(rectsByDisplay);
+
+  if (!options.force && signature === activeWindowPayloadSignature) {
+    return false;
+  }
+
+  activeWindowPayloadSignature = signature;
+
+  for (const win of getOverlayList()) {
+    sendToWindow(win, 'focus-veil:active-window', {
+      displayKey: win.focusVeilKey,
+      rect: rectsByDisplay.get(win.focusVeilKey) ?? null,
+      source
+    });
+  }
+
+  return true;
+}
+
+function startActiveWindowTracking() {
+  if (activeWindowPollInterval || isSmoke) {
+    return;
+  }
+
+  activeWindowPollInterval = setInterval(() => {
+    broadcastActiveWindowState('foreground');
+  }, activeWindowPollIntervalMs);
+}
+
+function stopActiveWindowTracking() {
+  if (!activeWindowPollInterval) {
+    return;
+  }
+
+  clearInterval(activeWindowPollInterval);
+  activeWindowPollInterval = null;
 }
 
 function hardenWebContents(win) {
@@ -395,6 +720,13 @@ function setOperationMode(enabled, source = 'main') {
     applyOperationModeToWindow(win);
   }
 
+  if (operationMode && controlWindow && !controlWindow.isDestroyed()) {
+    setActiveDisplayKey(controlWindow.focusVeilKey, source);
+  } else {
+    refreshActiveDisplay(source, { force: true });
+  }
+
+  broadcastActiveWindowState(source, { force: true });
   sendOperationMode(source);
   updateTrayMenu();
 }
@@ -637,6 +969,38 @@ async function runSmoke() {
     const normalState = await executeInRenderer('window.focusVeilSmoke.getState()');
     assertSmoke(assertions, 'normal mode hides controls', !normalState.controlsVisible, normalState);
 
+    await executeInRenderer('window.focusVeilSmoke.setActiveDisplay(false)');
+    await sleep(480);
+    screenshots.push(await captureSmoke('inactive-display'));
+    const inactiveDisplayState = await executeInRenderer('window.focusVeilSmoke.getState()');
+    assertSmoke(
+      assertions,
+      'inactive display fades out mouse spotlight',
+      !inactiveDisplayState.isActiveDisplay && inactiveDisplayState.spotlightPresence < 0.08,
+      inactiveDisplayState
+    );
+
+    await executeInRenderer('window.focusVeilSmoke.setActiveDisplay(true)');
+    await sleep(220);
+
+    await executeInRenderer(
+      'window.focusVeilSmoke.setActiveWindowRect({ x: 250, y: 150, width: 620, height: 330 })'
+    );
+    await sleep(480);
+    screenshots.push(await captureSmoke('active-window-glow'));
+    const activeWindowState = await executeInRenderer('window.focusVeilSmoke.getState()');
+    assertSmoke(
+      assertions,
+      'active window glow accepts foreground rectangle',
+      activeWindowState.activeWindowPresence > 0.88 &&
+        Math.abs(activeWindowState.activeWindowRect.x - 250) < 8 &&
+        Math.abs(activeWindowState.activeWindowRect.width - 620) < 8,
+      activeWindowState
+    );
+
+    await executeInRenderer('window.focusVeilSmoke.setActiveWindowRect(null)');
+    await sleep(220);
+
     const spotlightSettingsState = await executeInRenderer(
       'window.focusVeilSmoke.setSettings({ veilAlpha: 0.16, spotlightRadius: 270, spotlightSoftness: 0.78 })'
     );
@@ -836,6 +1200,11 @@ function createOverlayWindow(descriptor) {
       settings: getSettingsSnapshot(),
       source: 'ready'
     });
+    sendToWindow(win, 'focus-veil:active-display', {
+      activeDisplayKey: activeDisplayKey ?? detectActiveDisplayKey(),
+      source: 'ready'
+    });
+    broadcastActiveWindowState('ready', { force: true });
 
     if (descriptor.controls) {
       controlWindowShown = true;
@@ -851,6 +1220,11 @@ function createOverlayWindow(descriptor) {
       settings: getSettingsSnapshot(),
       source: 'load'
     });
+    sendToWindow(win, 'focus-veil:active-display', {
+      activeDisplayKey: activeDisplayKey ?? detectActiveDisplayKey(),
+      source: 'load'
+    });
+    broadcastActiveWindowState('load', { force: true });
 
     if (descriptor.controls) {
       controlWindowLoaded = true;
@@ -872,10 +1246,14 @@ function createOverlayWindows() {
   controlWindow = null;
   controlWindowLoaded = false;
   controlWindowShown = false;
+  activeWindowPayloadSignature = '';
 
   for (const descriptor of getDisplayDescriptors()) {
     createOverlayWindow(descriptor);
   }
+
+  refreshActiveDisplay('create', { force: true });
+  broadcastActiveWindowState('create', { force: true });
 }
 
 function rebuildOverlayWindows(source = 'rebuild') {
@@ -895,6 +1273,8 @@ function rebuildOverlayWindows(source = 'rebuild') {
   setTimeout(() => {
     setOperationMode(operationMode, source);
     broadcastTimerState(source);
+    refreshActiveDisplay(source, { force: true });
+    broadcastActiveWindowState(source, { force: true });
     rebuildingOverlays = false;
   }, 500);
 }
@@ -934,11 +1314,17 @@ ipcMain.handle('focus-veil:set-operation-mode', (event, enabled) => {
   return { enabled: operationMode };
 });
 
+ipcMain.on('focus-veil:cursor-activity', (event) => {
+  const senderWindow = assertTrustedIpcEvent(event);
+  setActiveDisplayKey(senderWindow.focusVeilKey, 'cursor');
+});
+
 ipcMain.handle('focus-veil:get-main-state', (event) => {
   assertTrustedIpcEvent(event);
   return {
     operationMode,
     smoke: isSmoke,
+    activeDisplayKey: activeDisplayKey ?? detectActiveDisplayKey(),
     settings: getSettingsSnapshot(),
     timer: getTimerSnapshot(),
     overlays: getOverlayList().map((win) => ({
@@ -1017,6 +1403,7 @@ app.whenReady().then(async () => {
   createTray();
   createOverlayWindows();
   registerShortcuts();
+  startActiveWindowTracking();
 
   screen.on('display-added', () => rebuildOverlayWindows('display-added'));
   screen.on('display-removed', () => rebuildOverlayWindows('display-removed'));
@@ -1037,6 +1424,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   stopTimerBroadcastInterval();
+  stopActiveWindowTracking();
   globalShortcut.unregisterAll();
 });
 

@@ -11,6 +11,7 @@ const query = new URLSearchParams(window.location.search);
 const isSmoke = query.get('smoke') === '1';
 const isPreview = query.get('preview') === '1';
 const hasControls = query.get('controls') !== '0';
+const displayKey = query.get('display') || 'display-unknown';
 const initialMotionEnabled = query.get('motion') !== '0';
 const motionFocusEnabled = true;
 const defaultSettings = {
@@ -38,8 +39,17 @@ const state = {
   mouseY: window.innerHeight / 2,
   spotX: window.innerWidth / 2,
   spotY: window.innerHeight / 2,
+  isActiveDisplay: true,
+  spotlightPresence: 1,
+  spotlightTargetPresence: 1,
   lastMouseMoveAt: performance.now(),
   lastSpotUpdate: performance.now(),
+  lastPresenceUpdate: performance.now(),
+  activeWindowRect: null,
+  activeWindowTargetRect: null,
+  activeWindowPresence: 0,
+  activeWindowTargetPresence: 0,
+  lastActiveWindowUpdate: performance.now(),
   motionHighlights: [],
   motionStatus: initialMotionEnabled ? 'starting' : 'disabled',
   settings: { ...defaultSettings },
@@ -76,6 +86,54 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function lerp(current, target, blend) {
+  return current + (target - current) * blend;
+}
+
+function sanitizeLocalRect(rect) {
+  if (!rect) {
+    return null;
+  }
+
+  const x = clamp(Number(rect.x), -24, window.innerWidth + 24);
+  const y = clamp(Number(rect.y), -24, window.innerHeight + 24);
+  const right = clamp(Number(rect.x) + Number(rect.width), -24, window.innerWidth + 24);
+  const bottom = clamp(Number(rect.y) + Number(rect.height), -24, window.innerHeight + 24);
+  const width = right - x;
+  const height = bottom - y;
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 32 || height < 32) {
+    return null;
+  }
+
+  return { x, y, width, height };
+}
+
+function addRoundedRectPath(rect, radius) {
+  const x = rect.x;
+  const y = rect.y;
+  const width = rect.width;
+  const height = rect.height;
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+
+  context.beginPath();
+
+  if (typeof context.roundRect === 'function') {
+    context.roundRect(x, y, width, height, safeRadius);
+    return;
+  }
+
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+}
+
 function resizeCanvas() {
   const scale = window.devicePixelRatio || 1;
   const width = Math.max(1, Math.floor(window.innerWidth * scale));
@@ -92,6 +150,40 @@ function setOperationMode(enabled) {
   state.operationMode = enabled;
   body.classList.toggle('operation-mode', enabled);
   requestActiveFrame(500);
+}
+
+function setActiveDisplay(active) {
+  const nextActive = Boolean(active);
+  const wasActive = state.isActiveDisplay;
+  state.isActiveDisplay = nextActive;
+  state.spotlightTargetPresence = nextActive ? 1 : 0;
+
+  if (nextActive && !wasActive) {
+    state.spotX = state.mouseX;
+    state.spotY = state.mouseY;
+    state.lastSpotUpdate = performance.now();
+  } else if (!nextActive) {
+    state.motionHighlights = [];
+  }
+
+  requestActiveFrame(520);
+}
+
+function applyActiveDisplayState(payload) {
+  setActiveDisplay(payload?.activeDisplayKey === displayKey);
+}
+
+function setActiveWindowRect(rect) {
+  const nextRect = sanitizeLocalRect(rect);
+  state.activeWindowTargetRect = nextRect;
+  state.activeWindowTargetPresence = nextRect ? 1 : 0;
+
+  if (nextRect && !state.activeWindowRect) {
+    state.activeWindowRect = { ...nextRect };
+    state.activeWindowPresence = 0;
+  }
+
+  requestActiveFrame(520);
 }
 
 function getNotificationPulse(now) {
@@ -319,6 +411,100 @@ function updateSpotPosition(now) {
   state.lastSpotUpdate = now;
 }
 
+function updateSpotlightPresence(now) {
+  const elapsed = clamp(now - state.lastPresenceUpdate, 1, 80);
+  const blend = 1 - Math.exp(-elapsed / 95);
+
+  state.spotlightPresence = lerp(
+    state.spotlightPresence,
+    state.spotlightTargetPresence,
+    blend
+  );
+
+  if (Math.abs(state.spotlightPresence - state.spotlightTargetPresence) < 0.01) {
+    state.spotlightPresence = state.spotlightTargetPresence;
+  }
+
+  state.lastPresenceUpdate = now;
+}
+
+function updateActiveWindowGlow(now) {
+  const elapsed = clamp(now - state.lastActiveWindowUpdate, 1, 80);
+  const blend = 1 - Math.exp(-elapsed / 115);
+
+  state.activeWindowPresence = lerp(
+    state.activeWindowPresence,
+    state.activeWindowTargetPresence,
+    blend
+  );
+
+  if (Math.abs(state.activeWindowPresence - state.activeWindowTargetPresence) < 0.01) {
+    state.activeWindowPresence = state.activeWindowTargetPresence;
+  }
+
+  if (state.activeWindowTargetRect) {
+    if (!state.activeWindowRect) {
+      state.activeWindowRect = { ...state.activeWindowTargetRect };
+    } else {
+      state.activeWindowRect = {
+        x: lerp(state.activeWindowRect.x, state.activeWindowTargetRect.x, blend),
+        y: lerp(state.activeWindowRect.y, state.activeWindowTargetRect.y, blend),
+        width: lerp(state.activeWindowRect.width, state.activeWindowTargetRect.width, blend),
+        height: lerp(state.activeWindowRect.height, state.activeWindowTargetRect.height, blend)
+      };
+    }
+  } else if (state.activeWindowPresence <= 0.01) {
+    state.activeWindowPresence = 0;
+    state.activeWindowRect = null;
+  }
+
+  state.lastActiveWindowUpdate = now;
+}
+
+function updateFocusGeometry(now) {
+  updateSpotPosition(now);
+  updateSpotlightPresence(now);
+  updateActiveWindowGlow(now);
+}
+
+function drawActiveWindowGlow() {
+  if (!state.activeWindowRect || state.activeWindowPresence <= 0.01) {
+    return;
+  }
+
+  const presence = state.activeWindowPresence;
+  const rect = {
+    x: state.activeWindowRect.x,
+    y: state.activeWindowRect.y,
+    width: state.activeWindowRect.width,
+    height: state.activeWindowRect.height
+  };
+  const radius = clamp(Math.min(rect.width, rect.height) * 0.035, 10, 22);
+  const clearAlpha = clamp(0.07 + state.settings.veilAlpha * 0.34, 0.08, 0.17) * presence;
+  const edgeAlpha = clearAlpha * 0.5;
+
+  context.save();
+  context.globalCompositeOperation = 'destination-out';
+  context.shadowColor = `rgba(0, 0, 0, ${edgeAlpha.toFixed(3)})`;
+  context.shadowBlur = 42;
+  context.shadowOffsetX = 0;
+  context.shadowOffsetY = 0;
+  context.fillStyle = `rgba(0, 0, 0, ${clearAlpha.toFixed(3)})`;
+  addRoundedRectPath(rect, radius);
+  context.fill();
+  context.restore();
+
+  context.save();
+  context.globalCompositeOperation = 'source-over';
+  context.shadowColor = `rgba(177, 226, 214, ${(0.018 * presence).toFixed(3)})`;
+  context.shadowBlur = 34;
+  context.strokeStyle = `rgba(214, 240, 232, ${(0.012 * presence).toFixed(3)})`;
+  context.lineWidth = 1;
+  addRoundedRectPath(rect, radius);
+  context.stroke();
+  context.restore();
+}
+
 function drawVeil(now = performance.now()) {
   const width = window.innerWidth;
   const height = window.innerHeight;
@@ -336,52 +522,62 @@ function drawVeil(now = performance.now()) {
   context.fillStyle = `rgba(0, 0, 0, ${spotlight.veilAlpha.toFixed(3)})`;
   context.fillRect(0, 0, width, height);
 
-  const gradient = context.createRadialGradient(
-    state.spotX,
-    state.spotY,
-    20,
-    state.spotX,
-    state.spotY,
-    spotlight.radius
-  );
-  gradient.addColorStop(0, `rgba(0, 0, 0, ${spotlight.centerClear.toFixed(3)})`);
-  gradient.addColorStop(
-    spotlight.coreStop,
-    `rgba(0, 0, 0, ${(spotlight.centerClear * 0.92).toFixed(3)})`
-  );
-  gradient.addColorStop(
-    spotlight.shoulderStop,
-    `rgba(0, 0, 0, ${spotlight.shoulderClear.toFixed(3)})`
-  );
-  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  drawActiveWindowGlow();
 
-  context.globalCompositeOperation = 'destination-out';
-  context.fillStyle = gradient;
-  context.beginPath();
-  context.arc(state.spotX, state.spotY, spotlight.radius, 0, Math.PI * 2);
-  context.fill();
-  context.globalCompositeOperation = 'source-over';
+  const spotlightPresence = state.spotlightPresence;
+  if (spotlightPresence > 0.01) {
+    const gradient = context.createRadialGradient(
+      state.spotX,
+      state.spotY,
+      20,
+      state.spotX,
+      state.spotY,
+      spotlight.radius
+    );
+    gradient.addColorStop(
+      0,
+      `rgba(0, 0, 0, ${(spotlight.centerClear * spotlightPresence).toFixed(3)})`
+    );
+    gradient.addColorStop(
+      spotlight.coreStop,
+      `rgba(0, 0, 0, ${(spotlight.centerClear * 0.92 * spotlightPresence).toFixed(3)})`
+    );
+    gradient.addColorStop(
+      spotlight.shoulderStop,
+      `rgba(0, 0, 0, ${(spotlight.shoulderClear * spotlightPresence).toFixed(3)})`
+    );
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-  const glow = context.createRadialGradient(
-    state.spotX,
-    state.spotY,
-    0,
-    state.spotX,
-    state.spotY,
-    spotlight.glowRadius
-  );
-  glow.addColorStop(
-    0,
-    `rgba(226, 248, 241, ${spotlight.glowAlpha.toFixed(3)})`
-  );
-  glow.addColorStop(0.58, 'rgba(186, 226, 216, 0.014)');
-  glow.addColorStop(1, 'rgba(186, 226, 216, 0)');
-  context.fillStyle = glow;
-  context.beginPath();
-  context.arc(state.spotX, state.spotY, spotlight.glowRadius, 0, Math.PI * 2);
-  context.fill();
+    context.globalCompositeOperation = 'destination-out';
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.arc(state.spotX, state.spotY, spotlight.radius, 0, Math.PI * 2);
+    context.fill();
+    context.globalCompositeOperation = 'source-over';
 
-  drawMotionHighlights(now);
+    const glow = context.createRadialGradient(
+      state.spotX,
+      state.spotY,
+      0,
+      state.spotX,
+      state.spotY,
+      spotlight.glowRadius
+    );
+    glow.addColorStop(
+      0,
+      `rgba(226, 248, 241, ${(spotlight.glowAlpha * spotlightPresence).toFixed(3)})`
+    );
+    glow.addColorStop(0.58, `rgba(186, 226, 216, ${(0.014 * spotlightPresence).toFixed(3)})`);
+    glow.addColorStop(1, 'rgba(186, 226, 216, 0)');
+    context.fillStyle = glow;
+    context.beginPath();
+    context.arc(state.spotX, state.spotY, spotlight.glowRadius, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  if (state.isActiveDisplay || state.operationMode) {
+    drawMotionHighlights(now);
+  }
   drawRippleField(width, height, now, pulse);
 }
 
@@ -389,6 +585,7 @@ let lastDraw = 0;
 let animationFrameId = null;
 let animationTimeoutId = null;
 let forceActiveUntil = 0;
+let lastCursorActivitySentAt = 0;
 
 function clearVeilCanvas() {
   context.clearRect(0, 0, window.innerWidth, window.innerHeight);
@@ -408,11 +605,27 @@ function isActiveAnimationState(now) {
   }
 
   const spotDistance = Math.hypot(state.mouseX - state.spotX, state.mouseY - state.spotY);
+  const spotlightTransition =
+    Math.abs(state.spotlightPresence - state.spotlightTargetPresence) > 0.01;
+  const activeWindowDistance =
+    state.activeWindowTargetRect && state.activeWindowRect
+      ? Math.hypot(
+          state.activeWindowTargetRect.x - state.activeWindowRect.x,
+          state.activeWindowTargetRect.y - state.activeWindowRect.y,
+          state.activeWindowTargetRect.width - state.activeWindowRect.width,
+          state.activeWindowTargetRect.height - state.activeWindowRect.height
+        )
+      : 0;
+  const windowTransition =
+    Math.abs(state.activeWindowPresence - state.activeWindowTargetPresence) > 0.01 ||
+    activeWindowDistance > 0.5;
 
   return (
     now - state.lastMouseMoveAt < activeAfterInputMs ||
     spotDistance > 0.5 ||
-    hasVisibleMotionHighlight(now) ||
+    spotlightTransition ||
+    windowTransition ||
+    ((state.isActiveDisplay || state.operationMode) && hasVisibleMotionHighlight(now)) ||
     now < state.notificationUntil ||
     now < forceActiveUntil ||
     state.operationMode
@@ -462,6 +675,17 @@ function requestActiveFrame(duration = 250) {
   scheduleAnimationLoop(true);
 }
 
+function notifyCursorActivity(now = performance.now()) {
+  const shouldSend = !state.isActiveDisplay || now - lastCursorActivitySentAt > 200;
+
+  if (!shouldSend) {
+    return;
+  }
+
+  lastCursorActivitySentAt = now;
+  window.focusVeil?.notifyCursorActivity?.();
+}
+
 function startAnimationLoop(active = true) {
   if (!state.settings.veilEnabled) {
     return;
@@ -478,7 +702,7 @@ function animationLoop(now) {
     return;
   }
 
-  updateSpotPosition(now);
+  updateFocusGeometry(now);
   sampleMotionFocus(now);
 
   const active = isActiveAnimationState(now);
@@ -655,10 +879,22 @@ function getPublicState() {
 
   return {
     operationMode: state.operationMode,
+    displayKey,
+    isActiveDisplay: state.isActiveDisplay,
+    spotlightPresence: Number(state.spotlightPresence.toFixed(3)),
     mouseX: Number(state.mouseX.toFixed(1)),
     mouseY: Number(state.mouseY.toFixed(1)),
     spotX: Number(state.spotX.toFixed(1)),
     spotY: Number(state.spotY.toFixed(1)),
+    activeWindowPresence: Number(state.activeWindowPresence.toFixed(3)),
+    activeWindowRect: state.activeWindowRect
+      ? {
+          x: Number(state.activeWindowRect.x.toFixed(1)),
+          y: Number(state.activeWindowRect.y.toFixed(1)),
+          width: Number(state.activeWindowRect.width.toFixed(1)),
+          height: Number(state.activeWindowRect.height.toFixed(1))
+        }
+      : null,
     motionStatus: state.motionStatus,
     motionHighlightCount: state.motionHighlights.length,
     motionStrongestX: Number(strongestHighlight.x.toFixed(1)),
@@ -708,6 +944,7 @@ function updateMotionHighlights(points, now = performance.now()) {
 function sampleMotionFocus(now) {
   if (
     !state.settings.veilEnabled ||
+    !state.isActiveDisplay ||
     !motionCapture.enabled ||
     !motionCapture.available ||
     !motionCapture.video ||
@@ -913,14 +1150,19 @@ settingsControls?.addEventListener('change', (event) => {
 
 window.addEventListener('resize', () => {
   resizeCanvas();
+  state.activeWindowTargetRect = sanitizeLocalRect(state.activeWindowTargetRect);
+  state.activeWindowRect = sanitizeLocalRect(state.activeWindowRect);
+  state.activeWindowTargetPresence = state.activeWindowTargetRect ? 1 : 0;
   lastDraw = 0;
   requestActiveFrame(500);
 });
 
 window.addEventListener('mousemove', (event) => {
+  const now = performance.now();
   state.mouseX = event.clientX;
   state.mouseY = event.clientY;
-  state.lastMouseMoveAt = performance.now();
+  state.lastMouseMoveAt = now;
+  notifyCursorActivity(now);
   requestActiveFrame(activeAfterInputMs);
 });
 
@@ -955,9 +1197,18 @@ window.focusVeil?.onSettingsChanged((payload) => {
   applySettings(payload?.settings);
 });
 
+window.focusVeil?.onActiveDisplayChanged((payload) => {
+  applyActiveDisplayState(payload);
+});
+
+window.focusVeil?.onActiveWindowChanged((payload) => {
+  setActiveWindowRect(payload?.rect);
+});
+
 window.focusVeil?.getMainState().then((mainState) => {
   applySettings(mainState.settings);
   applyTimerState(mainState.timer);
+  applyActiveDisplayState({ activeDisplayKey: mainState.activeDisplayKey });
 });
 
 if (isPreview) {
@@ -982,6 +1233,14 @@ if (isSmoke) {
       state.spotY = y;
       state.lastMouseMoveAt = performance.now();
       requestActiveFrame(500);
+      return getPublicState();
+    },
+    setActiveDisplay(active) {
+      setActiveDisplay(Boolean(active));
+      return getPublicState();
+    },
+    setActiveWindowRect(rect) {
+      setActiveWindowRect(rect);
       return getPublicState();
     },
     simulateMotion(x, y, strength = 0.8) {
