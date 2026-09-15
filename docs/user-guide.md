@@ -4,7 +4,7 @@
 
 Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重ねる集中補助アプリです。通常時は背面アプリへのクリックを邪魔せず、マウス周辺を柔らかく残しながら、周辺の視覚ノイズを少し抑えます。
 
-この説明書は、開発版のFocus Veilを自分のPCで起動し、日常作業中に操作するためのものです。
+この説明書は、配布 EXE または開発版のFocus Veilを自分のPCで起動し、日常作業中に操作するためのものです。
 
 ## 要点
 
@@ -27,19 +27,21 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 ### 起動
 
-初回は依存関係を入れます。
+普段使いは GitHub Releases の EXE。git / npm は不要。
+
+1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.0.exe` または `FocusVeil-Portable-0.1.0.exe` を落とす。
+2. 未署名のため SmartScreen / 「不明な発行元」が出ることがある。詳細を開いて実行する。
+3. インストーラーはスタートメニューに `Focus Veil` を追加する。ポータブルはファイルをダブルクリックする。
+4. 画面にヴェールが乗る。終了はトレイの `Quit`。
+
+開発版は依存関係を入れてから起動する。
 
 ```powershell
 npm install
-```
-
-通常起動は次のコマンドです。
-
-```powershell
 npm start
 ```
 
-起動に成功すると、ログにディスプレイごとのREADY行が出ます。
+開発起動に成功すると、ログにディスプレイごとのREADY行が出ます。
 
 ```text
 FOCUS_VEIL_READY display-...
@@ -146,4 +148,4 @@ FOCUS_VEIL_READY display-...
 - Motion highlightは画面キャプチャを使うため、保護された画面や権限の都合で無効になる場合があります。
 - Motion highlightは動画、広告、ローディング、スクロールにも反応することがあります。
 - Windows仮想デスクトップへの完全追従はElectron標準APIだけでは保証できません。表示が戻らない場合は `Ctrl+Shift+R` を使います。
-- インストーラーはまだありません。現状は開発版として `npm start` で起動します。
+- 配布 EXE は未署名です。Windows SmartScreen や「不明な発行元」が出ることがあります。
