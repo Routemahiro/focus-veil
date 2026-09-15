@@ -57,6 +57,7 @@ FOCUS_VEIL_READY display-...
 | --- | --- |
 | `Ctrl+Shift+F` | 操作モードの表示/非表示 |
 | `Esc` | 操作モードを閉じる |
+| メニュー外クリック | 操作モードを閉じる |
 | `Ctrl+Shift+R` | オーバーレイウィンドウを再配置 |
 | トレイ `Start Timer` | タイマー開始 |
 | トレイ `Pause Timer` | タイマー停止 |
@@ -65,7 +66,7 @@ FOCUS_VEIL_READY display-...
 
 ### 右下パネル
 
-通常時は、右下に残り時間だけが出ます。操作モードでは次のコントロールが表示されます。
+通常時は、右下に残り時間だけが出ます。操作モードでは次のコントロールが表示されます。パネル右下に `ショートカット：Ctrl+Shift+F` も出ます。
 
 | 項目 | 内容 | 目安 |
 | --- | --- | --- |
@@ -120,7 +121,7 @@ FOCUS_VEIL_READY display-...
 | --- | --- |
 | 片方のモニターに出ない | `Ctrl+Shift+R` またはトレイの `Refresh Overlay Windows` |
 | 仮想デスクトップ切替後に戻らない | `Ctrl+Shift+R` |
-| 背面アプリをクリックできない | 操作モードを閉じる。`Ctrl+Shift+F` または `Esc` |
+| 背面アプリをクリックできない | 操作モードを閉じる。`Ctrl+Shift+F`、`Esc`、またはメニュー外クリック |
 | 画面が暗すぎる | 操作モードで `Veil` を下げる、または `Overlay enabled` をOFF |
 | 動きのハイライトが気になる | `Motion highlight` をOFF |
 | タイマーだけ使いたい | `Overlay enabled` をOFF |
