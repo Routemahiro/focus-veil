@@ -6,6 +6,8 @@ const modeLabel = document.querySelector('#mode-label');
 const timeReadout = document.querySelector('#time-readout');
 const timerControls = document.querySelector('.timer-controls');
 const settingsControls = document.querySelector('.settings-controls');
+const operationDismiss = document.querySelector('.operation-dismiss');
+const shortcutHint = document.querySelector('.shortcut-hint');
 
 const query = new URLSearchParams(window.location.search);
 const isSmoke = query.get('smoke') === '1';
@@ -906,7 +908,10 @@ function getPublicState() {
     timeText: timeReadout.textContent,
     notificationCount: state.notificationCount,
     settings: { ...state.settings },
-    controlsVisible: hasControls && getComputedStyle(timerControls).display !== 'none'
+    controlsVisible: hasControls && getComputedStyle(timerControls).display !== 'none',
+    shortcutHint: shortcutHint?.textContent || '',
+    shortcutHintVisible:
+      hasControls && shortcutHint != null && getComputedStyle(shortcutHint).display !== 'none'
   };
 }
 
@@ -1113,6 +1118,15 @@ async function startMotionCapture() {
   }
 }
 
+operationDismiss?.addEventListener('click', () => {
+  if (!state.operationMode) {
+    return;
+  }
+
+  state.controlHoldMode = false;
+  requestOperationMode(false);
+});
+
 timerControls.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-action]');
   if (!button) {
@@ -1250,6 +1264,10 @@ if (isSmoke) {
     async setOperationMode(enabled) {
       setOperationMode(Boolean(enabled));
       await window.focusVeil?.setOperationMode(Boolean(enabled));
+      return getPublicState();
+    },
+    async dismissOperationMenu() {
+      operationDismiss?.click();
       return getPublicState();
     },
     triggerNotification() {

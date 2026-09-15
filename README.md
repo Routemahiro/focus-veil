@@ -26,7 +26,7 @@ npm run smoke
 - 通常時: 画面右下に残り時間だけを表示します。ウィンドウはクリック透過です。
 - 注目スポット: メインの明るい領域はマウス周辺に残ります。画面内の動きが検出できる場合は、その周辺に小さい芯と広いハローを短く足します。
 - 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Overlay enabledを表示し、クリックできます。
-- 操作モード終了: `Ctrl+Shift+F` で再切り替え、または操作モード中に `Esc`。
+- 操作モード終了: `Ctrl+Shift+F` で再切り替え、操作モード中に `Esc`、またはメニュー外をクリック。
 - オーバーレイ再配置: `Ctrl+Shift+R`。Windows仮想デスクトップ切り替え後に表示が戻らない場合の復帰用です。
 - トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Motion highlight、Veil Strength、再配置、終了を操作できます。
 - 設定保存: 透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Overlay enabledはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。

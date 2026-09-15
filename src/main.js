@@ -1044,6 +1044,31 @@ async function runSmoke() {
       operationState.operationMode && operationState.controlsVisible,
       operationState
     );
+    assertSmoke(
+      assertions,
+      'operation mode shows shortcut hint',
+      operationState.shortcutHint === 'ショートカット：Ctrl+Shift+F' &&
+        operationState.shortcutHintVisible,
+      operationState
+    );
+
+    const dismissedState = await executeInRenderer('window.focusVeilSmoke.dismissOperationMenu()');
+    await sleep(200);
+    assertSmoke(
+      assertions,
+      'click outside operation menu closes it',
+      !dismissedState.operationMode && !dismissedState.controlsVisible,
+      dismissedState
+    );
+
+    const reopenedState = await executeInRenderer('window.focusVeilSmoke.setOperationMode(true)');
+    await sleep(200);
+    assertSmoke(
+      assertions,
+      'operation mode can reopen after outside click',
+      reopenedState.operationMode && reopenedState.controlsVisible,
+      reopenedState
+    );
 
     await executeInRenderer('window.focusVeilSmoke.click("start")');
     await sleep(900);

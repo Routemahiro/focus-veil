@@ -96,6 +96,14 @@ body.preview-mode .preview-backdrop {
   pointer-events: none;
 }
 
+.operation-dismiss {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: transparent;
+}
+
 .overlay-ui {
   position: fixed;
   right: clamp(12px, 2vw, 28px);
@@ -237,6 +245,20 @@ body.timer-running .timer-controls button[data-action="start"] {
   accent-color: #9bd8ce;
 }
 
+.shortcut-hint {
+  display: none;
+  margin: 0;
+  padding: 0 10px 9px;
+  color: rgba(218, 234, 231, 0.72);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+}
+
+body.operation-mode .operation-dismiss {
+  display: block;
+}
+
 body.operation-mode .overlay-ui {
   pointer-events: auto;
 }
@@ -257,6 +279,10 @@ body.operation-mode .timer-controls {
 
 body.operation-mode .settings-controls {
   display: grid;
+}
+
+body.operation-mode .shortcut-hint {
+  display: block;
 }
 
 body.operation-mode .timer-line {
