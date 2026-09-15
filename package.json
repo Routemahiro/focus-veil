@@ -6,7 +6,10 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "smoke": "electron . --smoke"
+    "smoke": "electron . --smoke",
+    "dist:win": "electron-builder --win --x64",
+    "pack:win": "electron-builder --win --x64 --dir",
+    "checksum": "node scripts/write-sha256.js"
   },
   "keywords": [
     "electron",
@@ -17,9 +20,63 @@
   "author": "Routemahiro",
   "license": "UNLICENSED",
   "devDependencies": {
-    "electron": "41.7.0"
+    "electron": "41.7.0",
+    "electron-builder": "^26.0.12"
   },
   "dependencies": {
     "koffi": "^3.0.2"
+  },
+  "build": {
+    "appId": "com.routemahiro.focus-veil",
+    "productName": "Focus Veil",
+    "copyright": "Copyright © Routemahiro",
+    "forceCodeSigning": false,
+    "npmRebuild": false,
+    "beforePack": "scripts/prepare-win-koffi.js",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**",
+      "node_modules/@koromix/koffi-win32-x64/**"
+    ],
+    "extraMetadata": {
+      "main": "src/main.js"
+    },
+    "win": {
+      "executableName": "FocusVeil",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Focus Veil",
+      "uninstallDisplayName": "Focus Veil",
+      "artifactName": "FocusVeil-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "FocusVeil-Portable-${version}.${ext}"
+    }
   }
 }
