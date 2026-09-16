@@ -11,8 +11,8 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 git / npm なしで使う場合は、GitHub Releases の未署名 EXE を使う。
 
 - 最新版: https://github.com/Routemahiro/focus-veil/releases/latest
-- インストーラー: `FocusVeil-Setup-0.1.1.exe`（スタートメニューに追加。管理者権限は不要）
-- ポータブル: `FocusVeil-Portable-0.1.1.exe`（展開せずに実行）
+- インストーラー: `FocusVeil-Setup-0.1.2.exe`（スタートメニューに追加。管理者権限は不要）
+- ポータブル: `FocusVeil-Portable-0.1.2.exe`（展開せずに実行）
 
 Windows が SmartScreen や「不明な発行元」を出したら、詳細を開いて実行する。コード署名はない。終了はトレイの `Quit`。
 
