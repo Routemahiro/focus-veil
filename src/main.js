@@ -13,6 +13,7 @@ const {
   Tray,
   screen
 } = require('electron');
+const { createAutoUpdateController } = require('./auto-update');
 
 const isSmoke = process.argv.includes('--smoke');
 let koffi = null;
@@ -34,6 +35,7 @@ const activeWindowPollIntervalMs = 250;
 const defaultSettings = {
   veilEnabled: true,
   motionEnabled: true,
+  autoUpdateEnabled: true,
   veilAlpha: 0.16,
   spotlightRadius: 245,
   spotlightSoftness: 0.68,
@@ -42,6 +44,7 @@ const defaultSettings = {
 };
 
 const overlayWindows = new Map();
+const autoUpdate = createAutoUpdateController({ app, isSmoke });
 
 let controlWindow = null;
 let tray = null;
@@ -102,6 +105,10 @@ function normalizeSettings(candidate = {}) {
   return {
     veilEnabled: readBoolean(candidate.veilEnabled, defaultSettings.veilEnabled),
     motionEnabled: readBoolean(candidate.motionEnabled, defaultSettings.motionEnabled),
+    autoUpdateEnabled: readBoolean(
+      candidate.autoUpdateEnabled,
+      defaultSettings.autoUpdateEnabled
+    ),
     veilAlpha: Number(
       readNumber(candidate.veilAlpha, defaultSettings.veilAlpha, 0.04, 0.3).toFixed(3)
     ),
@@ -196,10 +203,15 @@ function broadcastSettings(source = 'main') {
 function updateSettings(patch = {}, source = 'main') {
   const previousWorkMinutes = settings.workMinutes;
   const previousBreakMinutes = settings.breakMinutes;
+  const previousAutoUpdateEnabled = settings.autoUpdateEnabled;
   settings = normalizeSettings({
     ...settings,
     ...patch
   });
+
+  if (previousAutoUpdateEnabled !== settings.autoUpdateEnabled) {
+    autoUpdate.syncFromSettings(settings);
+  }
 
   const durationChanged =
     previousWorkMinutes !== settings.workMinutes || previousBreakMinutes !== settings.breakMinutes;
@@ -785,6 +797,24 @@ function formatTrayTime() {
     .padStart(2, '0')}`;
 }
 
+function buildUpdateTrayItems() {
+  const updateState = autoUpdate.getTrayState();
+  if (!updateState.downloadedVersion || !updateState.enabled || !updateState.supported) {
+    return [];
+  }
+
+  return [
+    {
+      label: `Restart to Update (${updateState.downloadedVersion})`,
+      click: () => {
+        if (!autoUpdate.quitAndInstall()) {
+          updateTrayMenu();
+        }
+      }
+    }
+  ];
+}
+
 function updateTrayMenu() {
   if (!tray) {
     return;
@@ -824,6 +854,12 @@ function updateTrayMenu() {
       click: (item) => updateSettings({ motionEnabled: item.checked }, 'tray')
     },
     {
+      label: 'Auto-update',
+      type: 'checkbox',
+      checked: settings.autoUpdateEnabled,
+      click: (item) => updateSettings({ autoUpdateEnabled: item.checked }, 'tray')
+    },
+    {
       label: 'Veil Strength',
       submenu: [
         {
@@ -851,6 +887,7 @@ function updateTrayMenu() {
       label: 'Refresh Overlay Windows',
       click: () => rebuildOverlayWindows('tray-refresh')
     },
+    ...buildUpdateTrayItems(),
     {
       label: 'Quit Focus Veil',
       click: async () => {
@@ -858,7 +895,14 @@ function updateTrayMenu() {
         await saveSettingsNow().catch((error) => {
           console.warn('Focus Veil: failed to save settings before quit.', error);
         });
-        app.quit();
+        if (!settings.autoUpdateEnabled) {
+          autoUpdate.preventInstallOnQuit();
+          app.quit();
+          return;
+        }
+        if (!autoUpdate.quitAndInstall()) {
+          app.quit();
+        }
       }
     }
   ];
@@ -1013,6 +1057,33 @@ async function runSmoke() {
       spotlightSettingsState
     );
 
+    assertSmoke(
+      assertions,
+      'auto-update is on by default',
+      spotlightSettingsState.settings.autoUpdateEnabled === true,
+      spotlightSettingsState.settings
+    );
+
+    const autoUpdateOffState = await executeInRenderer(
+      'window.focusVeilSmoke.setSettings({ autoUpdateEnabled: false })'
+    );
+    assertSmoke(
+      assertions,
+      'auto-update setting can be disabled',
+      autoUpdateOffState.settings.autoUpdateEnabled === false,
+      autoUpdateOffState.settings
+    );
+
+    const autoUpdateOnState = await executeInRenderer(
+      'window.focusVeilSmoke.setSettings({ autoUpdateEnabled: true })'
+    );
+    assertSmoke(
+      assertions,
+      'auto-update setting can be enabled again',
+      autoUpdateOnState.settings.autoUpdateEnabled === true,
+      autoUpdateOnState.settings
+    );
+
     const motionState = await executeInRenderer('window.focusVeilSmoke.simulateMotion(260, 190, 0.85)');
     await sleep(450);
     screenshots.push(await captureSmoke('motion-highlight'));
@@ -1050,6 +1121,16 @@ async function runSmoke() {
       operationState.shortcutHint === 'ショートカット：Ctrl+Shift+F' &&
         operationState.shortcutHintVisible,
       operationState
+    );
+
+    const autoUpdateLabel = await executeInRenderer(
+      'document.querySelector(\'[data-setting="autoUpdateEnabled"]\')?.closest("label")?.innerText?.trim() || ""'
+    );
+    assertSmoke(
+      assertions,
+      'operation menu shows Auto-update toggle',
+      autoUpdateLabel.includes('Auto-update'),
+      { autoUpdateLabel }
     );
 
     const dismissedState = await executeInRenderer('window.focusVeilSmoke.dismissOperationMenu()');
@@ -1424,6 +1505,8 @@ app.whenReady().then(async () => {
   }
 
   await loadSettings();
+  autoUpdate.setOnStateChange(updateTrayMenu);
+  autoUpdate.start(settings);
   configureSessionSecurity();
   createTray();
   createOverlayWindows();
@@ -1444,6 +1527,12 @@ app.on('window-all-closed', () => {
 
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+app.on('before-quit', () => {
+  if (!settings.autoUpdateEnabled) {
+    autoUpdate.preventInstallOnQuit();
   }
 });
 

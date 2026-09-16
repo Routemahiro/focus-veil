@@ -11,10 +11,12 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 git / npm なしで使う場合は、GitHub Releases の未署名 EXE を使う。
 
 - 最新版: https://github.com/Routemahiro/focus-veil/releases/latest
-- インストーラー: `FocusVeil-Setup-0.1.0.exe`（スタートメニューに追加。管理者権限は不要）
-- ポータブル: `FocusVeil-Portable-0.1.0.exe`（展開せずに実行）
+- インストーラー: `FocusVeil-Setup-0.1.1.exe`（スタートメニューに追加。管理者権限は不要）
+- ポータブル: `FocusVeil-Portable-0.1.1.exe`（展開せずに実行）
 
 Windows が SmartScreen や「不明な発行元」を出したら、詳細を開いて実行する。コード署名はない。終了はトレイの `Quit`。
+
+自動更新は **インストール済み Setup** だけが対象。既定は ON で、GitHub Releases を確認して次の Setup を入れる。ポータブル EXE は自動更新しない。切るときは操作メニューまたはトレイの `Auto-update`。更新インストーラーでも SmartScreen が出ることがある。
 
 操作モードは `Ctrl+Shift+F`。メニュー外クリック、もう一度ショートカット、または `Esc` で閉じる。
 
@@ -46,11 +48,12 @@ npm run smoke
 
 - 通常時: 画面右下に残り時間だけを表示します。ウィンドウはクリック透過です。
 - 注目スポット: メインの明るい領域はマウス周辺に残ります。画面内の動きが検出できる場合は、その周辺に小さい芯と広いハローを短く足します。
-- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Overlay enabledを表示し、クリックできます。
+- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Overlay enabled、Auto-updateを表示し、クリックできます。
 - 操作モード終了: `Ctrl+Shift+F` で再切り替え、操作モード中に `Esc`、またはメニュー外をクリック。
 - オーバーレイ再配置: `Ctrl+Shift+R`。Windows仮想デスクトップ切り替え後に表示が戻らない場合の復帰用です。
-- トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Motion highlight、Veil Strength、再配置、終了を操作できます。
-- 設定保存: 透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Overlay enabledはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。
+- トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Motion highlight、Auto-update、Veil Strength、再配置、終了を操作できます。更新を入れたあとは `Restart to Update` も出ます。
+- 設定保存: 透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Overlay enabled、Auto-updateはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。
+- 自動更新: 既定 ON。Setup インストール版だけが `Routemahiro/focus-veil` の GitHub Releases を確認する。OFF なら確認・ダウンロード・更新確認はしない。ポータブル版は対象外。
 - Ctrl単体: Electronウィンドウにフォーカスがある場合のみベストエフォートで反応します。通常のクリック透過状態では背面作業を優先するため、安定操作は `Ctrl+Shift+F` に寄せています。
 
 ## ドキュメント
@@ -94,6 +97,16 @@ npm run smoke
 - Windows仮想デスクトップへの自動追従はベストエフォートです。Electron標準APIだけではWindows上で全仮想デスクトップへ確実にピン留めできないため、表示が戻らない場合は `Ctrl+Shift+R` でoverlay windowを現在のデスクトップへ作り直します。
 - マルチモニター/DPI差分はディスプレイごとのboundsで作成する構成に変更済みですが、DPI混在と負座標配置の手動確認は未実施です。
 - BGM/音声通知、複数テーマ、複雑なプロファイル管理はv0.1の対象外です。現在の設定保存は軽量な単一設定ファイルです。
+- 自動更新は Windows の Setup（NSIS）インストール版だけ。ポータブル / 開発起動 (`npm start`) / Linux smoke では確認しない。
+- 配布 EXE は未署名のため、初回実行と自動更新のインストーラーで SmartScreen が出ることがある。
+
+## プライバシー
+
+- 画面キャプチャ: Motion highlight が ON のときだけ、各ディスプレイを最大 640×360 / 5fps で取り込み、フレーム差分をローカルで計算する。映像は保存も送信もしない。OFF にできる。
+- 前景ウィンドウ: Windows 上で前面ウィンドウの矩形だけ読む。タイトルや内容は送らない。
+- 自動更新: 既定 ON。インストール済み Setup だけが GitHub Releases（`Routemahiro/focus-veil`）を確認し、更新があれば Setup を取得する。操作メニュー / トレイの `Auto-update` を外すと、確認・ダウンロード・更新確認はしない。
+- テレメトリ: アプリ独自の解析、クラッシュ送信、アカウント通信はない。
+- 設定: `%APPDATA%\Focus Veil\settings.json` にローカル保存。
 
 ## 残課題
 

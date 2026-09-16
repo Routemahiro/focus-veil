@@ -19,6 +19,7 @@ const motionFocusEnabled = true;
 const defaultSettings = {
   veilEnabled: true,
   motionEnabled: initialMotionEnabled,
+  autoUpdateEnabled: true,
   veilAlpha: 0.16,
   spotlightRadius: 245,
   spotlightSoftness: 0.68,
@@ -768,6 +769,10 @@ function normalizeSettings(candidate = {}) {
       typeof candidate.motionEnabled === 'boolean'
         ? candidate.motionEnabled
         : defaultSettings.motionEnabled,
+    autoUpdateEnabled:
+      typeof candidate.autoUpdateEnabled === 'boolean'
+        ? candidate.autoUpdateEnabled
+        : defaultSettings.autoUpdateEnabled,
     veilAlpha: clamp(Number(candidate.veilAlpha) || defaultSettings.veilAlpha, 0.04, 0.3),
     spotlightRadius: Math.round(
       clamp(Number(candidate.spotlightRadius) || defaultSettings.spotlightRadius, 140, 360)

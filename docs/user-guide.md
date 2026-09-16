@@ -10,8 +10,8 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 - 通常時はクリック透過です。背面のブラウザ、エディタ、PDF、IDEなどをそのまま操作できます。
 - 操作が必要なときだけ `Ctrl+Shift+F` で操作モードを開きます。
-- 右下の小さなパネルで、タイマー、暗さ、スポットサイズ、スポットの柔らかさ、Motion highlight、Overlay enabledを調整できます。
-- タスクトレイからも開始/停止、リセット、表示復帰、終了ができます。
+- 右下の小さなパネルで、タイマー、暗さ、スポットサイズ、スポットの柔らかさ、Motion highlight、Overlay enabled、Auto-updateを調整できます。
+- タスクトレイからも開始/停止、リセット、表示復帰、自動更新のON/OFF、終了ができます。
 - 表示がおかしくなった場合は `Ctrl+Shift+R` でオーバーレイを再配置できます。
 
 ## 比較
@@ -29,10 +29,11 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 普段使いは GitHub Releases の EXE。git / npm は不要。
 
-1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.0.exe` または `FocusVeil-Portable-0.1.0.exe` を落とす。
+1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.1.exe` または `FocusVeil-Portable-0.1.1.exe` を落とす。
 2. 未署名のため SmartScreen / 「不明な発行元」が出ることがある。詳細を開いて実行する。
 3. インストーラーはスタートメニューに `Focus Veil` を追加する。ポータブルはファイルをダブルクリックする。
 4. 画面にヴェールが乗る。終了はトレイの `Quit`。
+5. Setup で入れた場合、自動更新は既定 ON。切るときは操作メニューまたはトレイの `Auto-update`。ポータブル EXE は自動更新しない。
 
 開発版は依存関係を入れてから起動する。
 
@@ -82,6 +83,7 @@ FOCUS_VEIL_READY display-...
 | `Break` | 休憩時間の分数 | 初期値5分 |
 | `Motion highlight` | 画面内の動きへ薄いハイライトを足す | 不要ならOFF |
 | `Overlay enabled` | 暗幕とスポットライトを有効化 | 一時的に消したい時はOFF |
+| `Auto-update` | GitHub Releases から Setup 更新を確認 | 既定 ON。切ると確認もダウンロードもしない |
 
 ### トレイメニュー
 
@@ -92,8 +94,10 @@ FOCUS_VEIL_READY display-...
 - 操作モード切替
 - Overlay enabled
 - Motion highlight
+- Auto-update
 - Veil Strength
 - Refresh Overlay Windows
+- Restart to Update（更新を入れたあと）
 - Quit
 
 ### おすすめの使い方
@@ -134,6 +138,7 @@ FOCUS_VEIL_READY display-...
 
 - Overlay enabled
 - Motion highlight
+- Auto-update（`autoUpdateEnabled`。無い既存ファイルは ON として読む）
 - Veil
 - Size
 - Soft
@@ -142,10 +147,19 @@ FOCUS_VEIL_READY display-...
 
 `npm run smoke` の短時間テストでは、ユーザー設定を保存しません。
 
+### 自動更新
+
+- 対象は **インストール済み Setup**（スタートメニューから起動する版）だけ。ポータブル EXE と `npm start` は確認しない。
+- 既定は ON。起動後に `Routemahiro/focus-veil` の GitHub Releases を見にいく。
+- OFF にすると確認・ダウンロード・更新確認はしない。途中で切った場合も、終了時にインストーラーは起動しない。
+- 更新が入ったらトレイに `Restart to Update` が出る。Quit 時にも適用する。
+- 未署名のため、更新インストーラーでも SmartScreen / 「不明な発行元」が出ることがある。詳細情報 → 実行。
+
 ### 既知の制限
 
 - Ctrl単体でのグローバル操作は安定要件から外しています。安定操作は `Ctrl+Shift+F` です。
 - Motion highlightは画面キャプチャを使うため、保護された画面や権限の都合で無効になる場合があります。
 - Motion highlightは動画、広告、ローディング、スクロールにも反応することがあります。
 - Windows仮想デスクトップへの完全追従はElectron標準APIだけでは保証できません。表示が戻らない場合は `Ctrl+Shift+R` を使います。
-- 配布 EXE は未署名です。Windows SmartScreen や「不明な発行元」が出ることがあります。
+- 配布 EXE は未署名です。Windows SmartScreen や「不明な発行元」が、初回実行と自動更新の両方で出ることがあります。
+- 自動更新は Setup インストール版だけです。ポータブル利用者は Releases から新しい EXE を入れ直してください。
