@@ -35,6 +35,7 @@ const activeWindowPollIntervalMs = 250;
 const defaultSettings = {
   veilEnabled: true,
   motionEnabled: true,
+  rippleEnabled: true,
   autoUpdateEnabled: true,
   veilAlpha: 0.16,
   spotlightRadius: 245,
@@ -105,6 +106,7 @@ function normalizeSettings(candidate = {}) {
   return {
     veilEnabled: readBoolean(candidate.veilEnabled, defaultSettings.veilEnabled),
     motionEnabled: readBoolean(candidate.motionEnabled, defaultSettings.motionEnabled),
+    rippleEnabled: readBoolean(candidate.rippleEnabled, defaultSettings.rippleEnabled),
     autoUpdateEnabled: readBoolean(
       candidate.autoUpdateEnabled,
       defaultSettings.autoUpdateEnabled
@@ -854,6 +856,12 @@ function updateTrayMenu() {
       click: (item) => updateSettings({ motionEnabled: item.checked }, 'tray')
     },
     {
+      label: 'Ripple effects',
+      type: 'checkbox',
+      checked: settings.rippleEnabled,
+      click: (item) => updateSettings({ rippleEnabled: item.checked }, 'tray')
+    },
+    {
       label: 'Auto-update',
       type: 'checkbox',
       checked: settings.autoUpdateEnabled,
@@ -1084,6 +1092,52 @@ async function runSmoke() {
       autoUpdateOnState.settings
     );
 
+    assertSmoke(
+      assertions,
+      'ripple effects are on by default',
+      autoUpdateOnState.settings.rippleEnabled === true,
+      autoUpdateOnState.settings
+    );
+
+    const rippleOnState = await executeInRenderer('window.focusVeilSmoke.triggerNotification()');
+    assertSmoke(
+      assertions,
+      'ripple effects spawn water ripples when enabled',
+      rippleOnState.settings.rippleEnabled === true && rippleOnState.rippleCount > 0,
+      { rippleCount: rippleOnState.rippleCount, settings: rippleOnState.settings }
+    );
+
+    const rippleOffState = await executeInRenderer(
+      'window.focusVeilSmoke.setSettings({ rippleEnabled: false })'
+    );
+    assertSmoke(
+      assertions,
+      'ripple effects setting can be disabled',
+      rippleOffState.settings.rippleEnabled === false && rippleOffState.rippleCount === 0,
+      { rippleCount: rippleOffState.rippleCount, settings: rippleOffState.settings }
+    );
+
+    const rippleOffNotifyState = await executeInRenderer(
+      'window.focusVeilSmoke.triggerNotification()'
+    );
+    assertSmoke(
+      assertions,
+      'disabled ripple effects spawn no water ripples',
+      rippleOffNotifyState.settings.rippleEnabled === false &&
+        rippleOffNotifyState.rippleCount === 0,
+      { rippleCount: rippleOffNotifyState.rippleCount, settings: rippleOffNotifyState.settings }
+    );
+
+    const rippleOnAgainState = await executeInRenderer(
+      'window.focusVeilSmoke.setSettings({ rippleEnabled: true })'
+    );
+    assertSmoke(
+      assertions,
+      'ripple effects setting can be enabled again',
+      rippleOnAgainState.settings.rippleEnabled === true,
+      rippleOnAgainState.settings
+    );
+
     const motionState = await executeInRenderer('window.focusVeilSmoke.simulateMotion(260, 190, 0.85)');
     await sleep(450);
     screenshots.push(await captureSmoke('motion-highlight'));
@@ -1131,6 +1185,16 @@ async function runSmoke() {
       'operation menu shows Auto-update toggle',
       autoUpdateLabel.includes('Auto-update'),
       { autoUpdateLabel }
+    );
+
+    const rippleLabel = await executeInRenderer(
+      'document.querySelector(\'[data-setting="rippleEnabled"]\')?.closest("label")?.innerText?.trim() || ""'
+    );
+    assertSmoke(
+      assertions,
+      'operation menu shows Ripple effects toggle',
+      rippleLabel.includes('Ripple effects'),
+      { rippleLabel }
     );
 
     const dismissedState = await executeInRenderer('window.focusVeilSmoke.dismissOperationMenu()');

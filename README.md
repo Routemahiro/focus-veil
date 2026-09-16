@@ -4,15 +4,15 @@
 
 Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重ねるElectronアプリです。背面アプリのクリック操作を通常時は妨げず、マウス周辺の作業面を柔らかく残し、周辺の視覚ノイズを少しだけ抑えます。
 
-初期テーマは控えめな水面です。低速・低コントラスト・低密度のCanvas描画に留め、ポモドーロの残り時間と静かな通知演出で集中/休憩の切り替えを支援します。実験機能として、画面内の動きがある領域を低解像度で検出し、その周辺へ短い「気配」として薄いハイライトを足します。メインの明るい円はマウス周辺に残します。
+初期テーマは控えめな水面です。低速・低コントラスト・低密度のCanvas描画に留め、ポモドーロの残り時間と静かな通知演出で集中/休憩の切り替えを支援します。水面の揺らぎと薄い波紋は既定 ON で、操作メニューまたはトレイの `Ripple effects` で切れます。実験機能として、画面内の動きがある領域を低解像度で検出し、その周辺へ短い「気配」として薄いハイライトを足します。メインの明るい円はマウス周辺に残します。
 
 ## 配布版（Windows）
 
 git / npm なしで使う場合は、GitHub Releases の未署名 EXE を使う。
 
 - 最新版: https://github.com/Routemahiro/focus-veil/releases/latest
-- インストーラー: `FocusVeil-Setup-0.1.1.exe`（スタートメニューに追加。管理者権限は不要）
-- ポータブル: `FocusVeil-Portable-0.1.1.exe`（展開せずに実行）
+- インストーラー: `FocusVeil-Setup-0.1.2.exe`（スタートメニューに追加。管理者権限は不要）
+- ポータブル: `FocusVeil-Portable-0.1.2.exe`（展開せずに実行）
 
 Windows が SmartScreen や「不明な発行元」を出したら、詳細を開いて実行する。コード署名はない。終了はトレイの `Quit`。
 
@@ -48,11 +48,11 @@ npm run smoke
 
 - 通常時: 画面右下に残り時間だけを表示します。ウィンドウはクリック透過です。
 - 注目スポット: メインの明るい領域はマウス周辺に残ります。画面内の動きが検出できる場合は、その周辺に小さい芯と広いハローを短く足します。
-- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Overlay enabled、Auto-updateを表示し、クリックできます。
+- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Ripple effects、Overlay enabled、Auto-updateを表示し、クリックできます。
 - 操作モード終了: `Ctrl+Shift+F` で再切り替え、操作モード中に `Esc`、またはメニュー外をクリック。
 - オーバーレイ再配置: `Ctrl+Shift+R`。Windows仮想デスクトップ切り替え後に表示が戻らない場合の復帰用です。
-- トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Motion highlight、Auto-update、Veil Strength、再配置、終了を操作できます。更新を入れたあとは `Restart to Update` も出ます。
-- 設定保存: 透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Overlay enabled、Auto-updateはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。
+- トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Motion highlight、Ripple effects、Auto-update、Veil Strength、再配置、終了を操作できます。更新を入れたあとは `Restart to Update` も出ます。
+- 設定保存: 透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Motion highlight、Ripple effects、Overlay enabled、Auto-updateはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。
 - 自動更新: 既定 ON。Setup インストール版だけが `Routemahiro/focus-veil` の GitHub Releases を確認する。OFF なら確認・ダウンロード・更新確認はしない。ポータブル版は対象外。
 - Ctrl単体: Electronウィンドウにフォーカスがある場合のみベストエフォートで反応します。通常のクリック透過状態では背面作業を優先するため、安定操作は `Ctrl+Shift+F` に寄せています。
 
@@ -73,7 +73,7 @@ npm run smoke
 - 通常時は `setIgnoreMouseEvents(true, { forward: true })` でクリック透過にし、マウス移動だけをCanvasのフォーカスライトへ反映します。
 - 動き検出はElectronのscreen capture sourceを低解像度で読み、前フレームとの差分から重心を出します。大きすぎる全画面変化は抑制し、失敗時はマウス追従へフォールバックします。
 - 暗幕は黒16%を基準にし、通知時も白飛びや点滅を避けて1.6秒でふわっと開く演出にしています。
-- 水面表現は低密度の揺らぎと、ときどき出る薄い波紋に絞り、背面テキストやUIの可読性を優先しています。
+- 水面表現は低密度の揺らぎと、ときどき出る薄い波紋に絞り、背面テキストやUIの可読性を優先しています。不要なら操作メニューまたはトレイの `Ripple effects` をOFFにします。暗幕、マウススポット、Motion highlight、前景ウィンドウの光は別設定です。
 
 ## 検証結果
 
