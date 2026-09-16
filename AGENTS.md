@@ -39,7 +39,9 @@ Focus Veil は 1 リポジトリでソースと Windows 配布を扱う。リポ
 - 当面は Windows コード署名を行わない。署名がないことを理由にリリース作業を止めない。
 - ただし、未署名ビルドでは Windows SmartScreen / Unknown Publisher 警告が出る可能性があるため、公開文面にその旨を記載する。
 - 秘密鍵、証明書、トークン、署名関連ファイルは絶対にコミットしない。
-- リリースノートには、その版が実際に行う画面キャプチャ、前景ウィンドウ検出、通信/テレメトリの有無を書く。
+- リリースノートには、その版が実際に行う画面キャプチャ、前景ウィンドウ検出、自動更新（GitHub Releases 確認の有無と OFF 方法）、通信/テレメトリの有無を書く。
+- 自動更新は Windows の Setup（NSIS）だけ。Linux ターゲットや Linux 向け updater は追加しない。
+- コード署名は追加しない。`publisherName` は設定しない。updater の署名検証は no-op（未署名 NSIS 用）。サイレント導入は使わない。
 
 ### Release Flow
 
@@ -58,8 +60,9 @@ Focus Veil のアップデート作業が一段落し、ユーザーが配布更
 
 3. 配布用ビルドを作成する。
    - Windows 上、または Wine 付き環境で `npm run dist:win` を実行する。
-   - 推奨成果物は Windows installer と portable。
+   - 推奨成果物は Windows installer と portable。Linux ターゲットは作らない。
    - 例: `FocusVeil-Setup-x.y.z.exe`, `FocusVeil-Portable-x.y.z.exe`
+   - Setup 向け自動更新のため `latest.yml` と `FocusVeil-Setup-x.y.z.exe.blockmap` も dist に出す。`dist:win` は `--publish never`。GH_TOKEN が環境にあってもビルドだけでは Release を作らない。
 
 4. 配布物のSHA256チェックサムを作成する。
    - `npm run checksum`
@@ -81,9 +84,13 @@ gh release create vX.Y.Z `
   --title "Focus Veil vX.Y.Z" `
   --notes-file artifacts\release-notes\vX.Y.Z.md `
   dist\FocusVeil-Setup-X.Y.Z.exe `
+  dist\FocusVeil-Setup-X.Y.Z.exe.blockmap `
+  dist\latest.yml `
   dist\FocusVeil-Portable-X.Y.Z.exe `
   dist\FocusVeil-X.Y.Z.sha256
 ```
+
+`latest.yml` と Setup の `.blockmap` が無いと、インストール済み Setup の electron-updater は次の版を拾えない。ポータブル EXE は自動更新しない。
 
 7. 公開後に最新版リンクを確認する。
 
