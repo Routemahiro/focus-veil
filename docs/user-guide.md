@@ -10,7 +10,7 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 - 通常時はクリック透過です。背面のブラウザ、エディタ、PDF、IDEなどをそのまま操作できます。
 - 操作が必要なときだけ `Ctrl+Shift+F` で操作モードを開きます。
-- 右下の小さなパネルで、タイマー、暗さ、スポットサイズ、スポットの柔らかさ、Motion highlight、Overlay enabled、Auto-updateを調整できます。
+- 右下の小さなパネルで、タイマー、暗さ、スポットサイズ、スポットの柔らかさ、Motion highlight、Ripple effects、Overlay enabled、Auto-updateを調整できます。
 - タスクトレイからも開始/停止、リセット、表示復帰、自動更新のON/OFF、終了ができます。
 - 表示がおかしくなった場合は `Ctrl+Shift+R` でオーバーレイを再配置できます。
 
@@ -82,6 +82,7 @@ FOCUS_VEIL_READY display-...
 | `Focus` | 作業時間の分数 | 初期値25分 |
 | `Break` | 休憩時間の分数 | 初期値5分 |
 | `Motion highlight` | 画面内の動きへ薄いハイライトを足す | 不要ならOFF |
+| `Ripple effects` | 水面の揺らぎと薄い波紋 | 既定 ON。不要ならOFF。暗幕やスポットは残る |
 | `Overlay enabled` | 暗幕とスポットライトを有効化 | 一時的に消したい時はOFF |
 | `Auto-update` | GitHub Releases から Setup 更新を確認 | 既定 ON。切ると確認もダウンロードもしない |
 
@@ -94,6 +95,7 @@ FOCUS_VEIL_READY display-...
 - 操作モード切替
 - Overlay enabled
 - Motion highlight
+- Ripple effects
 - Auto-update
 - Veil Strength
 - Refresh Overlay Windows
@@ -130,6 +132,7 @@ FOCUS_VEIL_READY display-...
 | 背面アプリをクリックできない | 操作モードを閉じる。`Ctrl+Shift+F`、`Esc`、またはメニュー外クリック |
 | 画面が暗すぎる | 操作モードで `Veil` を下げる、または `Overlay enabled` をOFF |
 | 動きのハイライトが気になる | `Motion highlight` をOFF |
+| 水面の線や波紋が気になる | `Ripple effects` をOFF |
 | タイマーだけ使いたい | `Overlay enabled` をOFF |
 
 ### 設定保存
@@ -138,6 +141,7 @@ FOCUS_VEIL_READY display-...
 
 - Overlay enabled
 - Motion highlight
+- Ripple effects（`rippleEnabled`。無い既存ファイルは ON として読む）
 - Auto-update（`autoUpdateEnabled`。無い既存ファイルは ON として読む）
 - Veil
 - Size

@@ -19,6 +19,7 @@ const motionFocusEnabled = true;
 const defaultSettings = {
   veilEnabled: true,
   motionEnabled: initialMotionEnabled,
+  rippleEnabled: true,
   autoUpdateEnabled: true,
   veilAlpha: 0.16,
   spotlightRadius: 245,
@@ -207,6 +208,10 @@ function formatTime(seconds) {
 }
 
 function addRipple(now, x, y, strength = 1) {
+  if (!state.settings.rippleEnabled) {
+    return;
+  }
+
   state.ripples.push({
     x,
     y,
@@ -222,6 +227,11 @@ function addRipple(now, x, y, strength = 1) {
 }
 
 function updateRipples(width, height, now) {
+  if (!state.settings.rippleEnabled) {
+    state.ripples = [];
+    return;
+  }
+
   if (now >= state.nextRippleAt) {
     const marginX = width * 0.12;
     const marginY = height * 0.14;
@@ -238,6 +248,11 @@ function updateRipples(width, height, now) {
 }
 
 function drawRippleField(width, height, now, pulse) {
+  if (!state.settings.rippleEnabled) {
+    state.ripples = [];
+    return;
+  }
+
   updateRipples(width, height, now);
 
   context.save();
@@ -581,7 +596,9 @@ function drawVeil(now = performance.now()) {
   if (state.isActiveDisplay || state.operationMode) {
     drawMotionHighlights(now);
   }
-  drawRippleField(width, height, now, pulse);
+  if (state.settings.rippleEnabled) {
+    drawRippleField(width, height, now, pulse);
+  }
 }
 
 let lastDraw = 0;
@@ -769,6 +786,10 @@ function normalizeSettings(candidate = {}) {
       typeof candidate.motionEnabled === 'boolean'
         ? candidate.motionEnabled
         : defaultSettings.motionEnabled,
+    rippleEnabled:
+      typeof candidate.rippleEnabled === 'boolean'
+        ? candidate.rippleEnabled
+        : defaultSettings.rippleEnabled,
     autoUpdateEnabled:
       typeof candidate.autoUpdateEnabled === 'boolean'
         ? candidate.autoUpdateEnabled
@@ -818,6 +839,10 @@ function applySettings(settingsPatch = {}) {
   state.settings = nextSettings;
   body.classList.toggle('overlay-disabled', !state.settings.veilEnabled);
   syncSettingsControls();
+
+  if (!state.settings.rippleEnabled) {
+    state.ripples = [];
+  }
 
   if (!state.settings.veilEnabled) {
     state.motionHighlights = [];
@@ -904,6 +929,7 @@ function getPublicState() {
       : null,
     motionStatus: state.motionStatus,
     motionHighlightCount: state.motionHighlights.length,
+    rippleCount: state.ripples.length,
     motionStrongestX: Number(strongestHighlight.x.toFixed(1)),
     motionStrongestY: Number(strongestHighlight.y.toFixed(1)),
     motionStrongestStrength: Number(strongestHighlight.strength.toFixed(3)),
