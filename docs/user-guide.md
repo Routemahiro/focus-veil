@@ -29,7 +29,7 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 普段使いは GitHub Releases の EXE。git / npm は不要。
 
-1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.4.exe` または `FocusVeil-Portable-0.1.4.exe` を落とす。
+1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.5.exe` または `FocusVeil-Portable-0.1.5.exe` を落とす。
 2. 未署名のため SmartScreen / 「不明な発行元」が出ることがある。詳細を開いて実行する。
 3. インストーラーはスタートメニューに `Focus Veil` を追加する。ポータブルはファイルをダブルクリックする。
 4. 画面にヴェールが乗る。終了はトレイの `Quit`。
@@ -151,6 +151,7 @@ FOCUS_VEIL_READY display-...
 - 既定は ON。起動後に `Routemahiro/focus-veil` の GitHub Releases を見にいく。
 - OFF にすると確認・ダウンロード・更新確認はしない。途中で切った場合も、終了時にインストーラーは起動しない。
 - 更新が入ったらトレイに `Restart to Update` が出る。Quit 時にも適用する。
+- ダウンロード中だけ、右下のコンパクトタイマーの下に細い進捗バーが出る。終わると消える。
 - 未署名のため、更新インストーラーでも SmartScreen / 「不明な発行元」が出ることがある。詳細情報 → 実行。
 
 ### 既知の制限

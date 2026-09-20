@@ -9,6 +9,8 @@ const settingsControls = document.querySelector('.settings-controls');
 const operationDismiss = document.querySelector('.operation-dismiss');
 const idleShortcutHint = document.querySelector('.idle-shortcut-hint');
 const shortcutHint = document.querySelector('.shortcut-hint');
+const updateDownloadBar = document.querySelector('.update-download-bar');
+const updateDownloadFill = document.querySelector('.update-download-fill');
 
 const query = new URLSearchParams(window.location.search);
 const isSmoke = query.get('smoke') === '1';
@@ -59,7 +61,11 @@ const state = {
   notificationCount: 0,
   lastNotificationCount: 0,
   nextRippleAt: performance.now() + 1800 + Math.random() * 1800,
-  ripples: []
+  ripples: [],
+  updateDownload: {
+    transferring: false,
+    percent: 0
+  }
 };
 
 function clamp(value, min, max) {
@@ -695,6 +701,27 @@ function syncSettingsControls() {
   }
 }
 
+function applyUpdateDownload(progress = {}) {
+  const transferring = Boolean(progress.transferring);
+  const percent = transferring
+    ? Math.max(0, Math.min(100, Number(progress.percent) || 0))
+    : 0;
+
+  state.updateDownload = {
+    transferring,
+    percent
+  };
+
+  if (!updateDownloadBar || !updateDownloadFill) {
+    return;
+  }
+
+  updateDownloadBar.hidden = !transferring;
+  updateDownloadBar.setAttribute('aria-hidden', transferring ? 'false' : 'true');
+  updateDownloadBar.setAttribute('aria-valuenow', String(Math.round(percent)));
+  updateDownloadFill.style.width = transferring ? `${percent}%` : '0%';
+}
+
 function applySettings(settingsPatch = {}) {
   const nextSettings = normalizeSettings({
     ...state.settings,
@@ -779,7 +806,15 @@ function getPublicState() {
       getComputedStyle(idleShortcutHint).display !== 'none',
     shortcutHint: shortcutHint?.textContent || '',
     shortcutHintVisible:
-      hasControls && shortcutHint != null && getComputedStyle(shortcutHint).display !== 'none'
+      hasControls && shortcutHint != null && getComputedStyle(shortcutHint).display !== 'none',
+    updateDownloadTransferring: state.updateDownload.transferring,
+    updateDownloadPercent: Number(state.updateDownload.percent.toFixed(1)),
+    updateDownloadBarVisible:
+      hasControls &&
+      updateDownloadBar != null &&
+      !updateDownloadBar.hidden &&
+      getComputedStyle(updateDownloadBar).display !== 'none',
+    timerPanelWidth: timerPanel ? Number(timerPanel.getBoundingClientRect().width.toFixed(1)) : 0
   };
 }
 
@@ -884,10 +919,15 @@ window.focusVeil?.onActiveWindowChanged((payload) => {
   setActiveWindowRect(payload?.rect);
 });
 
+window.focusVeil?.onUpdateDownloadChanged((payload) => {
+  applyUpdateDownload(payload);
+});
+
 window.focusVeil?.getMainState().then((mainState) => {
   applySettings(mainState.settings);
   applyTimerState(mainState.timer);
   applyActiveDisplayState({ activeDisplayKey: mainState.activeDisplayKey });
+  applyUpdateDownload(mainState.updateDownload);
 });
 
 if (isPreview) {
@@ -938,6 +978,10 @@ if (isSmoke) {
     async setSettings(patch) {
       applySettings(patch);
       await window.focusVeil?.updateSettings(patch);
+      return getPublicState();
+    },
+    async setUpdateDownloadProgress(progress) {
+      applyUpdateDownload(await window.focusVeil?.debugSetUpdateDownload(progress));
       return getPublicState();
     }
   };

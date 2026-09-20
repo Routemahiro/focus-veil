@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('focusVeil', {
-  version: '0.1.4',
+  version: '0.1.5',
   getMainState: () => ipcRenderer.invoke('focus-veil:get-main-state'),
   setOperationMode: (enabled) =>
     ipcRenderer.invoke('focus-veil:set-operation-mode', Boolean(enabled)),
@@ -32,5 +32,12 @@ contextBridge.exposeInMainWorld('focusVeil', {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('focus-veil:active-window', listener);
     return () => ipcRenderer.removeListener('focus-veil:active-window', listener);
-  }
+  },
+  onUpdateDownloadChanged: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('focus-veil:update-download', listener);
+    return () => ipcRenderer.removeListener('focus-veil:update-download', listener);
+  },
+  debugSetUpdateDownload: (progress) =>
+    ipcRenderer.invoke('focus-veil:debug-update-download', progress)
 });

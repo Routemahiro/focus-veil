@@ -11,8 +11,8 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 git / npm なしで使う場合は、GitHub Releases の未署名 EXE を使う。
 
 - 最新版: https://github.com/Routemahiro/focus-veil/releases/latest
-- インストーラー: `FocusVeil-Setup-0.1.4.exe`（スタートメニューに追加。管理者権限は不要）
-- ポータブル: `FocusVeil-Portable-0.1.4.exe`（展開せずに実行）
+- インストーラー: `FocusVeil-Setup-0.1.5.exe`（スタートメニューに追加。管理者権限は不要）
+- ポータブル: `FocusVeil-Portable-0.1.5.exe`（展開せずに実行）
 
 Windows が SmartScreen や「不明な発行元」を出したら、詳細を開いて実行する。コード署名はない。終了はトレイの `Quit`。
 
@@ -53,7 +53,7 @@ npm run smoke
 - オーバーレイ再配置: `Ctrl+Shift+R`。Windows仮想デスクトップ切り替え後に表示が戻らない場合の復帰用です。
 - トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Ripple effects、Auto-update、Veil Strength、再配置、終了を操作できます。更新を入れたあとは `Restart to Update` も出ます。
 - 設定保存: 透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Auto-updateはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。古い `motionEnabled` は読み捨てます。
-- 自動更新: 既定 ON。Setup インストール版だけが `Routemahiro/focus-veil` の GitHub Releases を確認する。OFF なら確認・ダウンロード・更新確認はしない。ポータブル版は対象外。
+- 自動更新: 既定 ON。Setup インストール版だけが `Routemahiro/focus-veil` の GitHub Releases を確認する。OFF なら確認・ダウンロード・更新確認はしない。ポータブル版は対象外。ダウンロード中だけ右下のタイマー横に細いバーが出る。
 - Ctrl単体: Electronウィンドウにフォーカスがある場合のみベストエフォートで反応します。通常のクリック透過状態では背面作業を優先するため、安定操作は `Ctrl+Shift+F` に寄せています。
 
 ## ドキュメント
