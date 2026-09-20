@@ -10,7 +10,7 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 - 通常時はクリック透過です。背面のブラウザ、エディタ、PDF、IDEなどをそのまま操作できます。
 - 操作が必要なときだけ `Ctrl+Shift+F` で操作モードを開きます。
-- 右下の小さなパネルで、タイマー、暗さ、スポットサイズ、スポットの柔らかさ、Motion highlight、Ripple effects、Overlay enabled、Auto-updateを調整できます。
+- 右下の小さなパネルで、タイマー、暗さ、スポットサイズ、スポットの柔らかさ、Ripple effects、Overlay enabled、Auto-updateを調整できます。
 - タスクトレイからも開始/停止、リセット、表示復帰、自動更新のON/OFF、終了ができます。
 - 表示がおかしくなった場合は `Ctrl+Shift+R` でオーバーレイを再配置できます。
 
@@ -18,7 +18,7 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 | 状態 | できること | 背面アプリへの影響 |
 | --- | --- | --- |
-| 通常時 | 残り時間確認、マウス周辺のフォーカス、Motion highlight | クリック透過。作業を邪魔しない |
+| 通常時 | 残り時間確認、マウス周辺のフォーカス | クリック透過。作業を邪魔しない |
 | 操作モード | Start/Pause/Reset、設定変更、Overlay切替 | primary displayだけクリック可能 |
 | トレイメニュー | タイマー操作、表示復帰、終了 | 作業画面を開かずに操作できる |
 | Overlay disabled | タイマーとアプリ常駐だけ維持 | 暗幕とスポットライトを消す |
@@ -29,7 +29,7 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 普段使いは GitHub Releases の EXE。git / npm は不要。
 
-1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.2.exe` または `FocusVeil-Portable-0.1.2.exe` を落とす。
+1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.4.exe` または `FocusVeil-Portable-0.1.4.exe` を落とす。
 2. 未署名のため SmartScreen / 「不明な発行元」が出ることがある。詳細を開いて実行する。
 3. インストーラーはスタートメニューに `Focus Veil` を追加する。ポータブルはファイルをダブルクリックする。
 4. 画面にヴェールが乗る。終了はトレイの `Quit`。
@@ -69,7 +69,7 @@ FOCUS_VEIL_READY display-...
 
 ### 右下パネル
 
-通常時は、右下に残り時間だけが出ます。操作モードでは次のコントロールが表示されます。パネル右下に `ショートカット：Ctrl+Shift+F` も出ます。
+通常時は、右下に残り時間と小さな `Ctrl+Shift+F` が出ます。操作モードでは次のコントロールが表示されます。パネル右下に `ショートカット：Ctrl+Shift+F` も出ます。
 
 | 項目 | 内容 | 目安 |
 | --- | --- | --- |
@@ -81,7 +81,6 @@ FOCUS_VEIL_READY display-...
 | `Soft` | スポット境界の柔らかさ | 高めにすると自然に見える |
 | `Focus` | 作業時間の分数 | 初期値25分 |
 | `Break` | 休憩時間の分数 | 初期値5分 |
-| `Motion highlight` | 画面内の動きへ薄いハイライトを足す | 不要ならOFF |
 | `Ripple effects` | 水面の揺らぎと薄い波紋 | 既定 ON。不要ならOFF。暗幕やスポットは残る |
 | `Overlay enabled` | 暗幕とスポットライトを有効化 | 一時的に消したい時はOFF |
 | `Auto-update` | GitHub Releases から Setup 更新を確認 | 既定 ON。切ると確認もダウンロードもしない |
@@ -94,7 +93,6 @@ FOCUS_VEIL_READY display-...
 - タイマーリセット
 - 操作モード切替
 - Overlay enabled
-- Motion highlight
 - Ripple effects
 - Auto-update
 - Veil Strength
@@ -109,7 +107,6 @@ FOCUS_VEIL_READY display-...
 - `Veil` は標準から少し強め。
 - `Size` は狭すぎない程度。
 - `Soft` は高め。
-- Motion highlightはOFFでもよいです。
 
 #### コードを書く
 
@@ -121,7 +118,6 @@ FOCUS_VEIL_READY display-...
 
 - `Veil` は弱め。
 - `Size` は広め。
-- Motion highlightは、動画や広告があるページでは反応しすぎる場合があります。
 
 ### 表示がおかしい時
 
@@ -131,7 +127,6 @@ FOCUS_VEIL_READY display-...
 | 仮想デスクトップ切替後に戻らない | `Ctrl+Shift+R` |
 | 背面アプリをクリックできない | 操作モードを閉じる。`Ctrl+Shift+F`、`Esc`、またはメニュー外クリック |
 | 画面が暗すぎる | 操作モードで `Veil` を下げる、または `Overlay enabled` をOFF |
-| 動きのハイライトが気になる | `Motion highlight` をOFF |
 | 水面の線や波紋が気になる | `Ripple effects` をOFF |
 | タイマーだけ使いたい | `Overlay enabled` をOFF |
 
@@ -140,7 +135,6 @@ FOCUS_VEIL_READY display-...
 設定はElectronのuserData配下に `settings.json` として保存されます。保存対象は次の通りです。
 
 - Overlay enabled
-- Motion highlight
 - Ripple effects（`rippleEnabled`。無い既存ファイルは ON として読む）
 - Auto-update（`autoUpdateEnabled`。無い既存ファイルは ON として読む）
 - Veil
@@ -149,7 +143,7 @@ FOCUS_VEIL_READY display-...
 - Focus分数
 - Break分数
 
-`npm run smoke` の短時間テストでは、ユーザー設定を保存しません。
+`npm run smoke` の短時間テストでは、ユーザー設定を保存しません。古い `motionEnabled` は読み捨てます。
 
 ### 自動更新
 
@@ -162,8 +156,6 @@ FOCUS_VEIL_READY display-...
 ### 既知の制限
 
 - Ctrl単体でのグローバル操作は安定要件から外しています。安定操作は `Ctrl+Shift+F` です。
-- Motion highlightは画面キャプチャを使うため、保護された画面や権限の都合で無効になる場合があります。
-- Motion highlightは動画、広告、ローディング、スクロールにも反応することがあります。
 - Windows仮想デスクトップへの完全追従はElectron標準APIだけでは保証できません。表示が戻らない場合は `Ctrl+Shift+R` を使います。
 - 配布 EXE は未署名です。Windows SmartScreen や「不明な発行元」が、初回実行と自動更新の両方で出ることがあります。
 - 自動更新は Setup インストール版だけです。ポータブル利用者は Releases から新しい EXE を入れ直してください。
