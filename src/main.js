@@ -199,6 +199,17 @@ function broadcastSettings(source = 'main') {
   }
 }
 
+function broadcastUpdateDownload(source = 'main') {
+  const payload = {
+    ...autoUpdate.getDownloadProgress(),
+    source
+  };
+
+  for (const win of getOverlayList()) {
+    sendToWindow(win, 'focus-veil:update-download', payload);
+  }
+}
+
 function updateSettings(patch = {}, source = 'main') {
   const previousWorkMinutes = settings.workMinutes;
   const previousBreakMinutes = settings.breakMinutes;
@@ -1020,6 +1031,14 @@ async function runSmoke() {
         !normalState.shortcutHintVisible,
       normalState
     );
+    assertSmoke(
+      assertions,
+      'update download bar stays hidden while idle',
+      !normalState.updateDownloadTransferring &&
+        !normalState.updateDownloadBarVisible &&
+        normalState.updateDownloadPercent === 0,
+      normalState
+    );
 
     await executeInRenderer('window.focusVeilSmoke.setActiveDisplay(false)');
     await sleep(480);
@@ -1227,6 +1246,37 @@ async function runSmoke() {
       dismissedState
     );
 
+    const downloadingState = await executeInRenderer(
+      'window.focusVeilSmoke.setUpdateDownloadProgress({ transferring: true, percent: 42 })'
+    );
+    assertSmoke(
+      assertions,
+      'idle panel shows a compact update download bar',
+      !downloadingState.operationMode &&
+        downloadingState.updateDownloadTransferring &&
+        downloadingState.updateDownloadBarVisible &&
+        Math.abs(downloadingState.updateDownloadPercent - 42) < 0.2 &&
+        downloadingState.idleShortcutHintVisible &&
+        downloadingState.timerPanelWidth <= dismissedState.timerPanelWidth + 1,
+      {
+        downloadingState,
+        idlePanelWidth: dismissedState.timerPanelWidth
+      }
+    );
+
+    const downloadIdleState = await executeInRenderer(
+      'window.focusVeilSmoke.setUpdateDownloadProgress({ transferring: false, percent: 0 })'
+    );
+    assertSmoke(
+      assertions,
+      'update download bar hides when not downloading',
+      !downloadIdleState.updateDownloadTransferring &&
+        !downloadIdleState.updateDownloadBarVisible &&
+        downloadIdleState.updateDownloadPercent === 0 &&
+        downloadIdleState.idleShortcutHintVisible,
+      downloadIdleState
+    );
+
     const reopenedState = await executeInRenderer('window.focusVeilSmoke.setOperationMode(true)');
     await sleep(200);
     assertSmoke(
@@ -1394,6 +1444,10 @@ function createOverlayWindow(descriptor) {
       activeDisplayKey: activeDisplayKey ?? detectActiveDisplayKey(),
       source: 'ready'
     });
+    sendToWindow(win, 'focus-veil:update-download', {
+      ...autoUpdate.getDownloadProgress(),
+      source: 'ready'
+    });
     broadcastActiveWindowState('ready', { force: true });
 
     if (descriptor.controls) {
@@ -1412,6 +1466,10 @@ function createOverlayWindow(descriptor) {
     });
     sendToWindow(win, 'focus-veil:active-display', {
       activeDisplayKey: activeDisplayKey ?? detectActiveDisplayKey(),
+      source: 'load'
+    });
+    sendToWindow(win, 'focus-veil:update-download', {
+      ...autoUpdate.getDownloadProgress(),
       source: 'load'
     });
     broadcastActiveWindowState('load', { force: true });
@@ -1517,6 +1575,7 @@ ipcMain.handle('focus-veil:get-main-state', (event) => {
     activeDisplayKey: activeDisplayKey ?? detectActiveDisplayKey(),
     settings: getSettingsSnapshot(),
     timer: getTimerSnapshot(),
+    updateDownload: autoUpdate.getDownloadProgress(),
     overlays: getOverlayList().map((win) => ({
       key: win.focusVeilKey,
       controls: Boolean(win.focusVeilControls),
@@ -1533,6 +1592,15 @@ ipcMain.handle('focus-veil:timer-command', (event, action) => {
 ipcMain.handle('focus-veil:update-settings', (event, patch) => {
   assertTrustedIpcEvent(event);
   return updateSettings(patch, 'renderer');
+});
+
+ipcMain.handle('focus-veil:debug-update-download', (event, progress) => {
+  assertTrustedIpcEvent(event);
+  if (!isSmoke) {
+    throw new Error('debug update download is smoke-only');
+  }
+
+  return autoUpdate.debugSetDownloadProgress(progress);
 });
 
 function configureSessionSecurity() {
@@ -1555,6 +1623,9 @@ app.whenReady().then(async () => {
 
   await loadSettings();
   autoUpdate.setOnStateChange(updateTrayMenu);
+  autoUpdate.setOnDownloadProgress(() => {
+    broadcastUpdateDownload('progress');
+  });
   autoUpdate.start(settings);
   configureSessionSecurity();
   createTray();

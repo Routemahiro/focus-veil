@@ -258,6 +258,30 @@ body.timer-running .timer-controls button[data-action="start"] {
   white-space: nowrap;
 }
 
+.update-download-bar {
+  display: block;
+  box-sizing: border-box;
+  width: auto;
+  height: 2px;
+  margin: 0 8px 5px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(218, 234, 231, 0.16);
+}
+
+.update-download-bar[hidden] {
+  display: none;
+}
+
+.update-download-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(155, 216, 206, 0.84);
+  transition: width 120ms linear;
+}
+
 .shortcut-hint {
   display: none;
   margin: 0;
@@ -300,6 +324,10 @@ body.operation-mode .idle-shortcut-hint {
 
 body.operation-mode .shortcut-hint {
   display: block;
+}
+
+body.operation-mode .update-download-bar {
+  margin: 0 10px 8px;
 }
 
 body.operation-mode .timer-line {
