@@ -624,7 +624,6 @@ function tickTimerState(now = Date.now()) {
 
   timerState.phase = timerState.phase === 'work' ? 'break' : 'work';
   timerState.remaining = getTimerDuration(timerState.phase);
-  timerState.running = false;
   timerState.notificationCount += 1;
   updateTrayMenu();
   return true;
@@ -1024,6 +1023,15 @@ async function runSmoke() {
     assertSmoke(assertions, 'normal mode hides controls', !normalState.controlsVisible, normalState);
     assertSmoke(
       assertions,
+      'idle focus keeps the veil visible',
+      normalState.phase === 'work' &&
+        !normalState.running &&
+        normalState.veilPresence >= 0.92 &&
+        normalState.veilTargetPresence === 1,
+      normalState
+    );
+    assertSmoke(
+      assertions,
       'idle compact panel shows shortcut hint',
       !normalState.operationMode &&
         normalState.idleShortcutHint === 'Ctrl+Shift+F' &&
@@ -1313,11 +1321,47 @@ async function runSmoke() {
     const transitionState = await executeInRenderer('window.focusVeilSmoke.getState()');
     assertSmoke(
       assertions,
-      'short timer transitions to break and triggers notification',
+      'short timer loops to break and stays running',
       transitionState.phase === 'break' &&
-        !transitionState.running &&
+        transitionState.running &&
         transitionState.notificationCount >= 1,
       transitionState
+    );
+
+    await sleep(1600);
+    const breakVeilState = await executeInRenderer('window.focusVeilSmoke.getState()');
+    assertSmoke(
+      assertions,
+      'break fades the full-screen veil out',
+      breakVeilState.phase === 'break' &&
+        breakVeilState.running &&
+        breakVeilState.veilTargetPresence === 0 &&
+        breakVeilState.veilPresence <= 0.08,
+      breakVeilState
+    );
+
+    await sleep(900);
+    const loopState = await executeInRenderer('window.focusVeilSmoke.getState()');
+    assertSmoke(
+      assertions,
+      'break loops back to focus and stays running',
+      loopState.phase === 'work' &&
+        loopState.running &&
+        loopState.notificationCount >= 2,
+      loopState
+    );
+
+    await sleep(1600);
+    const focusVeilState = await executeInRenderer('window.focusVeilSmoke.getState()');
+    screenshots.push(await captureSmoke('focus-loop'));
+    assertSmoke(
+      assertions,
+      'focus fades the full-screen veil back in',
+      focusVeilState.phase === 'work' &&
+        focusVeilState.running &&
+        focusVeilState.veilTargetPresence === 1 &&
+        focusVeilState.veilPresence >= 0.92,
+      focusVeilState
     );
 
     for (const screenshot of screenshots) {
