@@ -61,7 +61,7 @@ IPCはoverlay windowかつ `renderer/index.html` からのsenderだけを受け�
 
 BrowserWindowは `transparent: true`、`frame: false`、`skipTaskbar: true`、`focusable: false`、`alwaysOnTop: true` を基準にしています。以前は `screen.getAllDisplays()` から仮想ディスプレイ全体の大きな矩形を作っていましたが、Windowsでは片側モニターだけに見えるケースがあったため、現在は各displayのboundsごとに1枚ずつoverlay windowを作ります。
 
-タイマー状態はメインプロセスで一元管理し、全overlay windowへIPCで同期します。これにより、複数ディスプレイでも残り時間と通知演出がずれません。操作UIはprimary displayのoverlayだけに表示し、他のdisplayは操作モード中もクリック透過を維持します。
+タイマー状態はメインプロセスで一元管理し、全overlay windowへIPCで同期します。これにより、複数ディスプレイでも残り時間と通知演出がずれません。フェーズが終わっても running は維持し、Focus → Break → Focus とループします。レンダラーは `veilPresence` を約0.56秒の時定数で補間し、Break入りで全画面のヴェールをふわっと消し、Focus戻りでふわっと戻します。Overlay enabled を切ったときだけ、従来どおり即クリアします。操作UIはprimary displayのoverlayだけに表示し、他のdisplayは操作モード中もクリック透過を維持します。
 
 各BrowserWindowには `setContentProtection(true)` を指定しています。外部スクリーンショットや画面共有にヴェールが写らない場合があります。
 
@@ -125,4 +125,4 @@ Windows仮想デスクトップはElectron標準APIだけで「全デスクト�
 
 ### 通知演出
 
-タイマー到達時は `notificationUntil = now + 1600ms` とし、sinカーブで暗幕のalphaを少し下げ、フォーカス半径を広げます。白い全面フラッシュ、点滅、音は使いません。smokeモードでは4秒/2秒の短縮タイマーで確認できます。
+タイマー到達時は `notificationUntil = now + 1600ms` とし、sinカーブで暗幕のalphaを少し下げ、フォーカス半径を広げます。同時にフェーズが切り替わり、Breakではヴェール全体が消え、Focusでは戻ります。白い全面フラッシュ、点滅、音は使いません。smokeモードでは4秒/2秒の短縮タイマーでループとフェードを確認できます。
