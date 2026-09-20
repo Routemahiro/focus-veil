@@ -34,6 +34,7 @@ const durations = {
 const activeDrawInterval = 32;
 const idleDrawInterval = 100;
 const activeAfterInputMs = 1500;
+const veilFadeMs = 560;
 
 const state = {
   operationMode: false,
@@ -57,6 +58,9 @@ const state = {
   phase: 'work',
   running: false,
   remaining: durations.work,
+  veilPresence: 1,
+  veilTargetPresence: 1,
+  lastVeilPresenceUpdate: performance.now(),
   notificationUntil: 0,
   notificationCount: 0,
   lastNotificationCount: 0,
@@ -253,7 +257,7 @@ function drawRippleField(width, height, now, pulse) {
       }
     }
     context.lineWidth = 1;
-    context.strokeStyle = 'rgba(148, 210, 202, 0.045)';
+    context.strokeStyle = `rgba(148, 210, 202, ${(0.045 * state.veilPresence).toFixed(3)})`;
     context.stroke();
   }
 
@@ -262,7 +266,8 @@ function drawRippleField(width, height, now, pulse) {
     const progress = Math.max(0, Math.min(1, age / ripple.duration));
     const eased = 1 - Math.pow(1 - progress, 2.2);
     const radius = ripple.maxRadius * eased;
-    const alpha = (1 - progress) * (0.105 + pulse * 0.04) * ripple.strength;
+    const alpha =
+      (1 - progress) * (0.105 + pulse * 0.04) * ripple.strength * state.veilPresence;
 
     context.beginPath();
     context.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2);
@@ -367,10 +372,41 @@ function updateActiveWindowGlow(now) {
   state.lastActiveWindowUpdate = now;
 }
 
+function getVeilTargetPresence() {
+  if (!state.settings.veilEnabled) {
+    return 0;
+  }
+
+  return state.phase === 'work' ? 1 : 0;
+}
+
+function syncVeilTargetPresence({ snap = false } = {}) {
+  state.veilTargetPresence = getVeilTargetPresence();
+
+  if (snap) {
+    state.veilPresence = state.veilTargetPresence;
+    state.lastVeilPresenceUpdate = performance.now();
+  }
+}
+
+function updateVeilPresence(now) {
+  const elapsed = clamp(now - state.lastVeilPresenceUpdate, 1, 80);
+  const blend = 1 - Math.exp(-elapsed / veilFadeMs);
+
+  state.veilPresence = lerp(state.veilPresence, state.veilTargetPresence, blend);
+
+  if (Math.abs(state.veilPresence - state.veilTargetPresence) < 0.008) {
+    state.veilPresence = state.veilTargetPresence;
+  }
+
+  state.lastVeilPresenceUpdate = now;
+}
+
 function updateFocusGeometry(now) {
   updateSpotPosition(now);
   updateSpotlightPresence(now);
   updateActiveWindowGlow(now);
+  updateVeilPresence(now);
 }
 
 function drawActiveWindowGlow() {
@@ -378,7 +414,7 @@ function drawActiveWindowGlow() {
     return;
   }
 
-  const presence = state.activeWindowPresence;
+  const presence = state.activeWindowPresence * state.veilPresence;
   const rect = {
     x: state.activeWindowRect.x,
     y: state.activeWindowRect.y,
@@ -415,22 +451,23 @@ function drawVeil(now = performance.now()) {
   const width = window.innerWidth;
   const height = window.innerHeight;
 
-  if (!state.settings.veilEnabled) {
+  if (!state.settings.veilEnabled || state.veilPresence <= 0.01) {
     context.clearRect(0, 0, width, height);
     return;
   }
 
   const pulse = getNotificationPulse(now);
   const spotlight = buildSpotlightParams(pulse);
+  const veilPresence = state.veilPresence;
 
   context.clearRect(0, 0, width, height);
 
-  context.fillStyle = `rgba(0, 0, 0, ${spotlight.veilAlpha.toFixed(3)})`;
+  context.fillStyle = `rgba(0, 0, 0, ${(spotlight.veilAlpha * veilPresence).toFixed(3)})`;
   context.fillRect(0, 0, width, height);
 
   drawActiveWindowGlow();
 
-  const spotlightPresence = state.spotlightPresence;
+  const spotlightPresence = state.spotlightPresence * veilPresence;
   if (spotlightPresence > 0.01) {
     const gradient = context.createRadialGradient(
       state.spotX,
@@ -517,12 +554,14 @@ function isActiveAnimationState(now) {
   const windowTransition =
     Math.abs(state.activeWindowPresence - state.activeWindowTargetPresence) > 0.01 ||
     activeWindowDistance > 0.5;
+  const veilTransition = Math.abs(state.veilPresence - state.veilTargetPresence) > 0.008;
 
   return (
     now - state.lastMouseMoveAt < activeAfterInputMs ||
     spotDistance > 0.5 ||
     spotlightTransition ||
     windowTransition ||
+    veilTransition ||
     now < state.notificationUntil ||
     now < forceActiveUntil ||
     state.operationMode
@@ -638,10 +677,12 @@ function applyTimerState(timerState) {
     return;
   }
 
+  const previousPhase = state.phase;
   state.phase = timerState.phase;
   state.running = timerState.running;
   state.remaining = timerState.remaining;
   state.notificationCount = timerState.notificationCount;
+  syncVeilTargetPresence();
 
   if (state.notificationCount > state.lastNotificationCount) {
     state.lastNotificationCount = state.notificationCount;
@@ -649,7 +690,7 @@ function applyTimerState(timerState) {
   }
 
   updateTimerUi();
-  requestActiveFrame(90);
+  requestActiveFrame(previousPhase === state.phase ? 90 : 2000);
 }
 
 function normalizeSettings(candidate = {}) {
@@ -731,6 +772,7 @@ function applySettings(settingsPatch = {}) {
   state.settings = nextSettings;
   body.classList.toggle('overlay-disabled', !state.settings.veilEnabled);
   syncSettingsControls();
+  syncVeilTargetPresence({ snap: veilWasEnabled !== state.settings.veilEnabled });
 
   if (!state.settings.rippleEnabled) {
     state.ripples = [];
@@ -797,6 +839,8 @@ function getPublicState() {
     remaining: Number(state.remaining.toFixed(2)),
     timeText: timeReadout.textContent,
     notificationCount: state.notificationCount,
+    veilPresence: Number(state.veilPresence.toFixed(3)),
+    veilTargetPresence: Number(state.veilTargetPresence.toFixed(3)),
     settings: { ...state.settings },
     controlsVisible: hasControls && getComputedStyle(timerControls).display !== 'none',
     idleShortcutHint: idleShortcutHint?.textContent || '',
