@@ -7,6 +7,7 @@ const timeReadout = document.querySelector('#time-readout');
 const timerControls = document.querySelector('.timer-controls');
 const settingsControls = document.querySelector('.settings-controls');
 const operationDismiss = document.querySelector('.operation-dismiss');
+const idleShortcutHint = document.querySelector('.idle-shortcut-hint');
 const shortcutHint = document.querySelector('.shortcut-hint');
 
 const query = new URLSearchParams(window.location.search);
@@ -940,6 +941,11 @@ function getPublicState() {
     notificationCount: state.notificationCount,
     settings: { ...state.settings },
     controlsVisible: hasControls && getComputedStyle(timerControls).display !== 'none',
+    idleShortcutHint: idleShortcutHint?.textContent || '',
+    idleShortcutHintVisible:
+      hasControls &&
+      idleShortcutHint != null &&
+      getComputedStyle(idleShortcutHint).display !== 'none',
     shortcutHint: shortcutHint?.textContent || '',
     shortcutHintVisible:
       hasControls && shortcutHint != null && getComputedStyle(shortcutHint).display !== 'none'

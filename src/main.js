@@ -1020,6 +1020,15 @@ async function runSmoke() {
     screenshots.push(await captureSmoke('normal'));
     const normalState = await executeInRenderer('window.focusVeilSmoke.getState()');
     assertSmoke(assertions, 'normal mode hides controls', !normalState.controlsVisible, normalState);
+    assertSmoke(
+      assertions,
+      'idle compact panel shows shortcut hint',
+      !normalState.operationMode &&
+        normalState.idleShortcutHint === 'Ctrl+Shift+F' &&
+        normalState.idleShortcutHintVisible &&
+        !normalState.shortcutHintVisible,
+      normalState
+    );
 
     await executeInRenderer('window.focusVeilSmoke.setActiveDisplay(false)');
     await sleep(480);
@@ -1173,7 +1182,8 @@ async function runSmoke() {
       assertions,
       'operation mode shows shortcut hint',
       operationState.shortcutHint === 'ショートカット：Ctrl+Shift+F' &&
-        operationState.shortcutHintVisible,
+        operationState.shortcutHintVisible &&
+        !operationState.idleShortcutHintVisible,
       operationState
     );
 
@@ -1203,6 +1213,14 @@ async function runSmoke() {
       assertions,
       'click outside operation menu closes it',
       !dismissedState.operationMode && !dismissedState.controlsVisible,
+      dismissedState
+    );
+    assertSmoke(
+      assertions,
+      'idle shortcut hint returns after closing operation menu',
+      dismissedState.idleShortcutHint === 'Ctrl+Shift+F' &&
+        dismissedState.idleShortcutHintVisible &&
+        !dismissedState.shortcutHintVisible,
       dismissedState
     );
 
