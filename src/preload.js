@@ -6,7 +6,6 @@ contextBridge.exposeInMainWorld('focusVeil', {
   setOperationMode: (enabled) =>
     ipcRenderer.invoke('focus-veil:set-operation-mode', Boolean(enabled)),
   notifyCursorActivity: () => ipcRenderer.send('focus-veil:cursor-activity'),
-  getCaptureSource: () => ipcRenderer.invoke('focus-veil:get-capture-source'),
   updateSettings: (patch) => ipcRenderer.invoke('focus-veil:update-settings', patch),
   timerCommand: (action) => ipcRenderer.invoke('focus-veil:timer-command', action),
   onOperationModeChanged: (callback) => {

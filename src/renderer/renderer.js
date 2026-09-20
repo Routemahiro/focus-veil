@@ -14,11 +14,8 @@ const isSmoke = query.get('smoke') === '1';
 const isPreview = query.get('preview') === '1';
 const hasControls = query.get('controls') !== '0';
 const displayKey = query.get('display') || 'display-unknown';
-const initialMotionEnabled = query.get('motion') !== '0';
-const motionFocusEnabled = true;
 const defaultSettings = {
   veilEnabled: true,
-  motionEnabled: initialMotionEnabled,
   rippleEnabled: true,
   autoUpdateEnabled: true,
   veilAlpha: 0.16,
@@ -34,7 +31,6 @@ const durations = {
 const activeDrawInterval = 32;
 const idleDrawInterval = 100;
 const activeAfterInputMs = 1500;
-const motionSampleInterval = 320;
 
 const state = {
   operationMode: false,
@@ -54,8 +50,6 @@ const state = {
   activeWindowPresence: 0,
   activeWindowTargetPresence: 0,
   lastActiveWindowUpdate: performance.now(),
-  motionHighlights: [],
-  motionStatus: initialMotionEnabled ? 'starting' : 'disabled',
   settings: { ...defaultSettings },
   phase: 'work',
   running: false,
@@ -66,25 +60,6 @@ const state = {
   nextRippleAt: performance.now() + 1800 + Math.random() * 1800,
   ripples: []
 };
-
-const motionCapture = {
-  enabled: initialMotionEnabled,
-  available: false,
-  stream: null,
-  video: null,
-  canvas: document.createElement('canvas'),
-  context: null,
-  previousFrame: null,
-  lastSample: 0,
-  sampleWidth: 128,
-  sampleHeight: 72
-};
-
-motionCapture.canvas.width = motionCapture.sampleWidth;
-motionCapture.canvas.height = motionCapture.sampleHeight;
-motionCapture.context = motionCapture.canvas.getContext('2d', {
-  willReadFrequently: true
-});
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -166,8 +141,6 @@ function setActiveDisplay(active) {
     state.spotX = state.mouseX;
     state.spotY = state.mouseY;
     state.lastSpotUpdate = performance.now();
-  } else if (!nextActive) {
-    state.motionHighlights = [];
   }
 
   requestActiveFrame(520);
@@ -298,98 +271,6 @@ function drawRippleField(width, height, now, pulse) {
   }
 
   context.restore();
-}
-
-function drawMotionHighlights(now) {
-  state.motionHighlights = state.motionHighlights.filter((highlight) => {
-    const age = now - highlight.updatedAt;
-    return age < 1800 && highlight.strength > 0.035;
-  });
-
-  if (state.motionHighlights.length === 0) {
-    return;
-  }
-
-  const mouseIdleFactor = clamp((now - state.lastMouseMoveAt - 450) / 900, 0.58, 1);
-  const visibleHighlights = state.motionHighlights.slice(0, 3);
-
-  context.save();
-  context.globalCompositeOperation = 'destination-out';
-
-  for (const highlight of visibleHighlights) {
-    const alpha = getMotionEnvelope(highlight, now) * highlight.strength * mouseIdleFactor;
-    const radius = 150 + highlight.strength * 120;
-    const reveal = context.createRadialGradient(
-      highlight.x,
-      highlight.y,
-      0,
-      highlight.x,
-      highlight.y,
-      radius
-    );
-    reveal.addColorStop(0, `rgba(0, 0, 0, ${(alpha * 0.16).toFixed(3)})`);
-    reveal.addColorStop(0.42, `rgba(0, 0, 0, ${(alpha * 0.08).toFixed(3)})`);
-    reveal.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-    context.fillStyle = reveal;
-    context.beginPath();
-    context.arc(highlight.x, highlight.y, radius, 0, Math.PI * 2);
-    context.fill();
-  }
-
-  context.globalCompositeOperation = 'source-over';
-
-  for (const highlight of visibleHighlights) {
-    const alpha = getMotionEnvelope(highlight, now) * highlight.strength * mouseIdleFactor;
-    const coreRadius = 58 + highlight.strength * 46;
-    const haloRadius = 180 + highlight.strength * 105;
-    const halo = context.createRadialGradient(
-      highlight.x,
-      highlight.y,
-      0,
-      highlight.x,
-      highlight.y,
-      haloRadius
-    );
-    halo.addColorStop(0, `rgba(226, 252, 244, ${(alpha * 0.095).toFixed(3)})`);
-    halo.addColorStop(0.32, `rgba(172, 224, 213, ${(alpha * 0.042).toFixed(3)})`);
-    halo.addColorStop(1, 'rgba(172, 224, 213, 0)');
-
-    context.fillStyle = halo;
-    context.beginPath();
-    context.arc(highlight.x, highlight.y, haloRadius, 0, Math.PI * 2);
-    context.fill();
-
-    const core = context.createRadialGradient(
-      highlight.x,
-      highlight.y,
-      0,
-      highlight.x,
-      highlight.y,
-      coreRadius
-    );
-    core.addColorStop(0, `rgba(246, 255, 249, ${(alpha * 0.09).toFixed(3)})`);
-    core.addColorStop(1, 'rgba(246, 255, 249, 0)');
-
-    context.fillStyle = core;
-    context.beginPath();
-    context.arc(highlight.x, highlight.y, coreRadius, 0, Math.PI * 2);
-    context.fill();
-  }
-
-  context.restore();
-}
-
-function getMotionEnvelope(highlight, now) {
-  const sinceCreated = now - (highlight.createdAt ?? highlight.updatedAt);
-  const sinceUpdated = now - highlight.updatedAt;
-  const attack = clamp(sinceCreated / 120, 0, 1);
-
-  if (sinceUpdated < 340) {
-    return attack;
-  }
-
-  return attack * clamp(1 - (sinceUpdated - 340) / 1150, 0, 1);
 }
 
 function buildSpotlightParams(pulse) {
@@ -593,9 +474,6 @@ function drawVeil(now = performance.now()) {
     context.fill();
   }
 
-  if (state.isActiveDisplay || state.operationMode) {
-    drawMotionHighlights(now);
-  }
   if (state.settings.rippleEnabled) {
     drawRippleField(width, height, now, pulse);
   }
@@ -610,13 +488,6 @@ let lastCursorActivitySentAt = 0;
 function clearVeilCanvas() {
   context.clearRect(0, 0, window.innerWidth, window.innerHeight);
   lastDraw = performance.now();
-}
-
-function hasVisibleMotionHighlight(now) {
-  return state.motionHighlights.some((highlight) => {
-    const age = now - highlight.updatedAt;
-    return age < 1800 && highlight.strength > 0.035;
-  });
 }
 
 function isActiveAnimationState(now) {
@@ -645,7 +516,6 @@ function isActiveAnimationState(now) {
     spotDistance > 0.5 ||
     spotlightTransition ||
     windowTransition ||
-    ((state.isActiveDisplay || state.operationMode) && hasVisibleMotionHighlight(now)) ||
     now < state.notificationUntil ||
     now < forceActiveUntil ||
     state.operationMode
@@ -723,7 +593,6 @@ function animationLoop(now) {
   }
 
   updateFocusGeometry(now);
-  sampleMotionFocus(now);
 
   const active = isActiveAnimationState(now);
   const drawInterval = active ? activeDrawInterval : idleDrawInterval;
@@ -782,10 +651,6 @@ function normalizeSettings(candidate = {}) {
       typeof candidate.veilEnabled === 'boolean'
         ? candidate.veilEnabled
         : defaultSettings.veilEnabled,
-    motionEnabled:
-      typeof candidate.motionEnabled === 'boolean'
-        ? candidate.motionEnabled
-        : defaultSettings.motionEnabled,
     rippleEnabled:
       typeof candidate.rippleEnabled === 'boolean'
         ? candidate.rippleEnabled
@@ -834,7 +699,6 @@ function applySettings(settingsPatch = {}) {
     ...state.settings,
     ...settingsPatch
   });
-  const motionWasEnabled = state.settings.motionEnabled;
   const veilWasEnabled = state.settings.veilEnabled;
   state.settings = nextSettings;
   body.classList.toggle('overlay-disabled', !state.settings.veilEnabled);
@@ -845,10 +709,6 @@ function applySettings(settingsPatch = {}) {
   }
 
   if (!state.settings.veilEnabled) {
-    state.motionHighlights = [];
-    motionCapture.enabled = false;
-    state.motionStatus = state.settings.motionEnabled ? 'paused' : 'disabled';
-    stopMotionCapture();
     cancelAnimationSchedule();
     clearVeilCanvas();
     return;
@@ -857,26 +717,6 @@ function applySettings(settingsPatch = {}) {
   if (!veilWasEnabled) {
     lastDraw = 0;
     startAnimationLoop(true);
-  }
-
-  if (!state.settings.motionEnabled) {
-    motionCapture.enabled = false;
-    state.motionHighlights = [];
-    state.motionStatus = 'disabled';
-    stopMotionCapture();
-    requestActiveFrame(500);
-    return;
-  }
-
-  motionCapture.enabled = motionFocusEnabled;
-  if (!motionFocusEnabled) {
-    state.motionStatus = 'disabled';
-    requestActiveFrame(500);
-    return;
-  }
-
-  if (!motionWasEnabled || !motionCapture.stream) {
-    startMotionCapture();
   }
 
   requestActiveFrame(500);
@@ -904,11 +744,6 @@ function requestSettingsUpdate(patch) {
 }
 
 function getPublicState() {
-  const strongestHighlight = state.motionHighlights.reduce(
-    (strongest, highlight) => (highlight.strength > strongest.strength ? highlight : strongest),
-    { x: 0, y: 0, strength: 0 }
-  );
-
   return {
     operationMode: state.operationMode,
     displayKey,
@@ -927,12 +762,8 @@ function getPublicState() {
           height: Number(state.activeWindowRect.height.toFixed(1))
         }
       : null,
-    motionStatus: state.motionStatus,
-    motionHighlightCount: state.motionHighlights.length,
+    motionHighlightCount: 0,
     rippleCount: state.ripples.length,
-    motionStrongestX: Number(strongestHighlight.x.toFixed(1)),
-    motionStrongestY: Number(strongestHighlight.y.toFixed(1)),
-    motionStrongestStrength: Number(strongestHighlight.strength.toFixed(3)),
     phase: state.phase,
     running: state.running,
     remaining: Number(state.remaining.toFixed(2)),
@@ -944,209 +775,6 @@ function getPublicState() {
     shortcutHintVisible:
       hasControls && shortcutHint != null && getComputedStyle(shortcutHint).display !== 'none'
   };
-}
-
-function updateMotionHighlights(points, now = performance.now()) {
-  for (const point of points) {
-    const x = clamp(point.x, 0, window.innerWidth);
-    const y = clamp(point.y, 0, window.innerHeight);
-    const strength = clamp(point.strength, 0, 1);
-    let nearest = null;
-    let nearestDistance = Infinity;
-
-    for (const highlight of state.motionHighlights) {
-      const distance = Math.hypot(highlight.x - x, highlight.y - y);
-      if (distance < nearestDistance) {
-        nearest = highlight;
-        nearestDistance = distance;
-      }
-    }
-
-    if (nearest && nearestDistance < 170) {
-      nearest.x += (x - nearest.x) * 0.35;
-      nearest.y += (y - nearest.y) * 0.35;
-      nearest.strength = Math.max(nearest.strength, strength);
-      nearest.updatedAt = now;
-    } else {
-      state.motionHighlights.push({ x, y, strength, createdAt: now, updatedAt: now });
-    }
-  }
-
-  state.motionHighlights.sort((a, b) => b.strength - a.strength);
-  state.motionHighlights = state.motionHighlights.slice(0, 3);
-  requestActiveFrame(650);
-}
-
-function sampleMotionFocus(now) {
-  if (
-    !state.settings.veilEnabled ||
-    !state.isActiveDisplay ||
-    !motionCapture.enabled ||
-    !motionCapture.available ||
-    !motionCapture.video ||
-    now - motionCapture.lastSample < motionSampleInterval
-  ) {
-    return;
-  }
-
-  if (motionCapture.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-    return;
-  }
-
-  motionCapture.lastSample = now;
-  const sampleWidth = motionCapture.sampleWidth;
-  const sampleHeight = motionCapture.sampleHeight;
-  const sampleContext = motionCapture.context;
-  sampleContext.drawImage(motionCapture.video, 0, 0, sampleWidth, sampleHeight);
-
-  const frame = sampleContext.getImageData(0, 0, sampleWidth, sampleHeight);
-  const current = frame.data;
-
-  if (!motionCapture.previousFrame) {
-    motionCapture.previousFrame = new Uint8ClampedArray(current);
-    return;
-  }
-
-  const previous = motionCapture.previousFrame;
-  let totalWeight = 0;
-  let activePixels = 0;
-  const cellColumns = 8;
-  const cellRows = 6;
-  const cellWeights = Array.from({ length: cellColumns * cellRows }, () => 0);
-  const cellWeightedX = Array.from({ length: cellColumns * cellRows }, () => 0);
-  const cellWeightedY = Array.from({ length: cellColumns * cellRows }, () => 0);
-
-  for (let y = 0; y < sampleHeight; y += 1) {
-    for (let x = 0; x < sampleWidth; x += 1) {
-      const offset = (y * sampleWidth + x) * 4;
-      const previousLuma =
-        previous[offset] * 0.299 + previous[offset + 1] * 0.587 + previous[offset + 2] * 0.114;
-      const currentLuma =
-        current[offset] * 0.299 + current[offset + 1] * 0.587 + current[offset + 2] * 0.114;
-      const diff = Math.abs(currentLuma - previousLuma);
-
-      if (diff <= 8) {
-        continue;
-      }
-
-      const weight = diff - 8;
-      totalWeight += weight;
-      activePixels += 1;
-
-      const cellX = Math.min(cellColumns - 1, Math.floor((x / sampleWidth) * cellColumns));
-      const cellY = Math.min(cellRows - 1, Math.floor((y / sampleHeight) * cellRows));
-      const cellIndex = cellY * cellColumns + cellX;
-      cellWeights[cellIndex] += weight;
-      cellWeightedX[cellIndex] += x * weight;
-      cellWeightedY[cellIndex] += y * weight;
-    }
-  }
-
-  motionCapture.previousFrame.set(current);
-
-  const activeRatio = activePixels / (sampleWidth * sampleHeight);
-  const broadMotionPenalty = activeRatio > 0.34 ? clamp(1 - (activeRatio - 0.34) / 0.28, 0, 1) : 1;
-  const confidence = clamp((totalWeight - 260) / 8500, 0, 1) * broadMotionPenalty;
-
-  if (confidence <= 0.025 || totalWeight <= 0) {
-    return;
-  }
-
-  const points = cellWeights
-    .map((weight, index) => ({ weight, index }))
-    .filter((cell) => cell.weight > 60)
-    .sort((a, b) => b.weight - a.weight)
-    .slice(0, 4)
-    .map((cell) => ({
-      x: (cellWeightedX[cell.index] / cell.weight / sampleWidth) * window.innerWidth,
-      y: (cellWeightedY[cell.index] / cell.weight / sampleHeight) * window.innerHeight,
-      strength: clamp((cell.weight / Math.max(1, totalWeight)) * 1.7 + confidence * 0.26, 0.08, 0.55)
-    }));
-
-  updateMotionHighlights(points, now);
-}
-
-function stopMotionCapture() {
-  if (!motionCapture.stream) {
-    motionCapture.available = false;
-    motionCapture.video = null;
-    motionCapture.previousFrame = null;
-    return;
-  }
-
-  for (const track of motionCapture.stream.getTracks()) {
-    track.stop();
-  }
-
-  motionCapture.stream = null;
-  motionCapture.video = null;
-  motionCapture.available = false;
-  motionCapture.previousFrame = null;
-}
-
-async function startMotionCapture() {
-  if (motionCapture.stream) {
-    return;
-  }
-
-  if (!state.settings.veilEnabled) {
-    state.motionStatus = motionCapture.enabled ? 'paused' : 'disabled';
-    return;
-  }
-
-  if (!motionCapture.enabled || !navigator.mediaDevices?.getUserMedia) {
-    state.motionStatus = motionCapture.enabled ? 'unavailable' : 'disabled';
-    return;
-  }
-
-  try {
-    const source = await window.focusVeil?.getCaptureSource();
-    if (!source?.id) {
-      state.motionStatus = 'unavailable';
-      return;
-    }
-
-    if (!state.settings.veilEnabled || !motionCapture.enabled) {
-      state.motionStatus = state.settings.veilEnabled ? 'disabled' : 'paused';
-      return;
-    }
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        mandatory: {
-          chromeMediaSource: 'desktop',
-          chromeMediaSourceId: source.id,
-          maxWidth: 640,
-          maxHeight: 360,
-          maxFrameRate: 5
-        }
-      }
-    });
-
-    const video = document.createElement('video');
-    video.muted = true;
-    video.playsInline = true;
-    video.srcObject = stream;
-    await video.play();
-
-    if (!state.settings.veilEnabled || !motionCapture.enabled) {
-      for (const track of stream.getTracks()) {
-        track.stop();
-      }
-      state.motionStatus = state.settings.veilEnabled ? 'disabled' : 'paused';
-      return;
-    }
-
-    motionCapture.stream = stream;
-    motionCapture.video = video;
-    motionCapture.available = true;
-    state.motionStatus = 'active';
-  } catch (error) {
-    console.warn('Focus Veil: motion highlight capture unavailable.', error);
-    stopMotionCapture();
-    state.motionStatus = 'fallback';
-  }
 }
 
 operationDismiss?.addEventListener('click', () => {
@@ -1288,10 +916,6 @@ if (isSmoke) {
       setActiveWindowRect(rect);
       return getPublicState();
     },
-    simulateMotion(x, y, strength = 0.8) {
-      updateMotionHighlights([{ x, y, strength }]);
-      return getPublicState();
-    },
     async setOperationMode(enabled) {
       setOperationMode(Boolean(enabled));
       await window.focusVeil?.setOperationMode(Boolean(enabled));
@@ -1316,5 +940,4 @@ if (isSmoke) {
 resizeCanvas();
 updateTimerUi();
 syncSettingsControls();
-startMotionCapture();
 startAnimationLoop(true);

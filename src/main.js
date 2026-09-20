@@ -4,7 +4,6 @@ const { pathToFileURL } = require('node:url');
 const {
   app,
   BrowserWindow,
-  desktopCapturer,
   globalShortcut,
   ipcMain,
   Menu,
@@ -34,7 +33,6 @@ const timerActions = new Set(['start', 'pause', 'reset']);
 const activeWindowPollIntervalMs = 250;
 const defaultSettings = {
   veilEnabled: true,
-  motionEnabled: true,
   rippleEnabled: true,
   autoUpdateEnabled: true,
   veilAlpha: 0.16,
@@ -105,7 +103,6 @@ function readNumber(value, fallback, min, max) {
 function normalizeSettings(candidate = {}) {
   return {
     veilEnabled: readBoolean(candidate.veilEnabled, defaultSettings.veilEnabled),
-    motionEnabled: readBoolean(candidate.motionEnabled, defaultSettings.motionEnabled),
     rippleEnabled: readBoolean(candidate.rippleEnabled, defaultSettings.rippleEnabled),
     autoUpdateEnabled: readBoolean(
       candidate.autoUpdateEnabled,
@@ -850,12 +847,6 @@ function updateTrayMenu() {
       click: (item) => updateSettings({ veilEnabled: item.checked }, 'tray')
     },
     {
-      label: 'Motion Highlight',
-      type: 'checkbox',
-      checked: settings.motionEnabled,
-      click: (item) => updateSettings({ motionEnabled: item.checked }, 'tray')
-    },
-    {
       label: 'Ripple effects',
       type: 'checkbox',
       checked: settings.rippleEnabled,
@@ -1138,26 +1129,38 @@ async function runSmoke() {
       rippleOnAgainState.settings
     );
 
-    const motionState = await executeInRenderer('window.focusVeilSmoke.simulateMotion(260, 190, 0.85)');
+    const motionToggle = await executeInRenderer(
+      'document.querySelector(\'[data-setting="motionEnabled"]\') ? "present" : "absent"'
+    );
+    const motionApi = await executeInRenderer(
+      'typeof window.focusVeilSmoke.simulateMotion'
+    );
+    const spotlightState = await executeInRenderer('window.focusVeilSmoke.setMouse(640, 360)');
     await sleep(450);
-    screenshots.push(await captureSmoke('motion-highlight'));
-    const focusedMotionState = await executeInRenderer('window.focusVeilSmoke.getState()');
+    screenshots.push(await captureSmoke('spotlight-only'));
+    const focusedSpotlightState = await executeInRenderer('window.focusVeilSmoke.getState()');
     assertSmoke(
       assertions,
-      'motion highlight accepts moving region',
-      motionState.motionHighlightCount > 0 &&
-        Math.abs(motionState.motionStrongestX - 260) < 2 &&
-        Math.abs(motionState.motionStrongestY - 190) < 2,
-      motionState
+      'motion highlight is removed from settings and overlay',
+      motionToggle === 'absent' &&
+        motionApi === 'undefined' &&
+        focusedSpotlightState.settings.motionEnabled === undefined &&
+        focusedSpotlightState.motionHighlightCount === 0,
+      {
+        motionToggle,
+        motionApi,
+        settings: focusedSpotlightState.settings,
+        motionHighlightCount: focusedSpotlightState.motionHighlightCount
+      }
     );
     assertSmoke(
       assertions,
-      'motion highlight keeps mouse spotlight independent',
-      Math.abs(focusedMotionState.motionStrongestX - 260) < 80 &&
-        Math.abs(focusedMotionState.motionStrongestY - 190) < 60 &&
-        Math.abs(focusedMotionState.mouseX - 640) < 2 &&
-        Math.abs(focusedMotionState.mouseY - 360) < 2,
-      focusedMotionState
+      'mouse spotlight still tracks independently without motion highlight',
+      Math.abs(spotlightState.mouseX - 640) < 2 &&
+        Math.abs(spotlightState.mouseY - 360) < 2 &&
+        Math.abs(focusedSpotlightState.spotX - 640) < 2 &&
+        Math.abs(focusedSpotlightState.spotY - 360) < 2,
+      { spotlightState, focusedSpotlightState }
     );
 
     const operationState = await executeInRenderer('window.focusVeilSmoke.setOperationMode(true)');
@@ -1356,8 +1359,7 @@ function createOverlayWindow(descriptor) {
       smoke: isSmoke ? '1' : '0',
       preview: descriptor.preview ? '1' : '0',
       controls: descriptor.controls ? '1' : '0',
-      display: descriptor.key,
-      motion: settings.motionEnabled ? '1' : '0'
+      display: descriptor.key
     }
   });
 
@@ -1515,44 +1517,9 @@ ipcMain.handle('focus-veil:update-settings', (event, patch) => {
   return updateSettings(patch, 'renderer');
 });
 
-ipcMain.handle('focus-veil:get-capture-source', async (event) => {
-  const senderWindow = assertTrustedIpcEvent(event);
-  if (!settings.motionEnabled) {
-    return null;
-  }
-
-  const displayId = senderWindow?.focusVeilDisplayId;
-  const sources = await desktopCapturer.getSources({
-    types: ['screen'],
-    thumbnailSize: { width: 0, height: 0 }
-  });
-
-  const source =
-    sources.find((candidate) => candidate.display_id === displayId) ??
-    sources.find((candidate) => candidate.display_id) ??
-    sources[0];
-
-  if (!source) {
-    return null;
-  }
-
-  return {
-    id: source.id,
-    name: source.name,
-    displayId: source.display_id
-  };
-});
-
 function configureSessionSecurity() {
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const senderWindow = BrowserWindow.fromWebContents(webContents);
-    const trusted =
-      senderWindow &&
-      !senderWindow.isDestroyed() &&
-      getOverlayList().includes(senderWindow) &&
-      isTrustedRendererUrl(webContents.getURL());
-
-    callback(Boolean(trusted && ['media', 'display-capture'].includes(permission)));
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
   });
 }
 
