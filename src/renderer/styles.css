@@ -245,6 +245,19 @@ body.timer-running .timer-controls button[data-action="start"] {
   accent-color: #9bd8ce;
 }
 
+.idle-shortcut-hint {
+  display: block;
+  margin: 0;
+  padding: 0 8px 5px;
+  color: rgba(218, 234, 231, 0.5);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .shortcut-hint {
   display: none;
   margin: 0;
@@ -279,6 +292,10 @@ body.operation-mode .timer-controls {
 
 body.operation-mode .settings-controls {
   display: grid;
+}
+
+body.operation-mode .idle-shortcut-hint {
+  display: none;
 }
 
 body.operation-mode .shortcut-hint {
