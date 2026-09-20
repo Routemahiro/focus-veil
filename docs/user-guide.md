@@ -29,7 +29,7 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 普段使いは GitHub Releases の EXE。git / npm は不要。
 
-1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.4.exe` または `FocusVeil-Portable-0.1.4.exe` を落とす。
+1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.5.exe` または `FocusVeil-Portable-0.1.5.exe` を落とす。
 2. 未署名のため SmartScreen / 「不明な発行元」が出ることがある。詳細を開いて実行する。
 3. インストーラーはスタートメニューに `Focus Veil` を追加する。ポータブルはファイルをダブルクリックする。
 4. 画面にヴェールが乗る。終了はトレイの `Quit`。

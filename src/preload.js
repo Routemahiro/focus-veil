@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('focusVeil', {
-  version: '0.1.4',
+  version: '0.1.5',
   getMainState: () => ipcRenderer.invoke('focus-veil:get-main-state'),
   setOperationMode: (enabled) =>
     ipcRenderer.invoke('focus-veil:set-operation-mode', Boolean(enabled)),
