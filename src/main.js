@@ -1257,7 +1257,7 @@ async function runSmoke() {
         downloadingState.updateDownloadBarVisible &&
         Math.abs(downloadingState.updateDownloadPercent - 42) < 0.2 &&
         downloadingState.idleShortcutHintVisible &&
-        downloadingState.timerPanelWidth <= dismissedState.timerPanelWidth + 1,
+        downloadingState.timerPanelWidth <= 116,
       {
         downloadingState,
         idlePanelWidth: dismissedState.timerPanelWidth
