@@ -1,5 +1,22 @@
 # Verification Log
 
+## 2026-09-20
+
+### タイマーループとヴェールフェード
+
+- Focus 終了後も timer を止めず、Break → Focus と回り続けるよう変更。
+- Break 入りで全画面ヴェールをふわっと消し、Focus 戻りでふわっと戻す。
+- Overlay enabled OFF、マウススポット、Ripple、コンパクトタイマー、更新バーは維持。バージョン上げなし。
+
+#### 実行コマンド
+
+| コマンド | 結果 | メモ |
+| --- | --- | --- |
+| `node --check src/main.js` | 成功 | 構文OK |
+| `node --check src/preload.js` | 成功 | 変更なし |
+| `node --check src/renderer/renderer.js` | 成功 | 構文OK |
+| `npm run smoke` | 成功 | 既存 assertion 維持。追加: idle veil、Focus→Break 継続、Break で veilPresence ≤ 0.08、Break→Focus 継続、Focus で veilPresence ≥ 0.92 |
+
 ## 2026-06-12
 
 ### Phase 1軽量化
