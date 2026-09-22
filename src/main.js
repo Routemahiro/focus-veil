@@ -1066,6 +1066,14 @@ async function runSmoke() {
     );
     assertSmoke(
       assertions,
+      'idle waiting frame uses the focus color',
+      normalState.phase === 'work' &&
+        !normalState.operationMode &&
+        normalState.phaseFrame === 'rgb(110, 152, 120)',
+      normalState
+    );
+    assertSmoke(
+      assertions,
       'update download bar stays hidden while idle',
       !normalState.updateDownloadTransferring &&
         !normalState.updateDownloadBarVisible &&
@@ -1231,6 +1239,15 @@ async function runSmoke() {
       assertions,
       'operation mode shows controls',
       operationState.operationMode && operationState.controlsVisible,
+      operationState
+    );
+    assertSmoke(
+      assertions,
+      'settings frame and accent use the focus color',
+      operationState.phase === 'work' &&
+        operationState.operationMode &&
+        operationState.phaseFrame === 'rgb(110, 152, 120)' &&
+        operationState.phaseAccent === 'rgb(110, 152, 120)',
       operationState
     );
     assertSmoke(
@@ -1401,6 +1418,28 @@ async function runSmoke() {
         transitionState.notificationCount >= 1,
       transitionState
     );
+    assertSmoke(
+      assertions,
+      'settings frame and accent use the break color',
+      transitionState.phase === 'break' &&
+        transitionState.operationMode &&
+        transitionState.phaseFrame === 'rgb(201, 173, 198)' &&
+        transitionState.phaseAccent === 'rgb(201, 173, 198)',
+      transitionState
+    );
+
+    const breakIdleState = await executeInRenderer('window.focusVeilSmoke.setOperationMode(false)');
+    assertSmoke(
+      assertions,
+      'idle waiting frame uses the break color',
+      breakIdleState.phase === 'break' &&
+        !breakIdleState.operationMode &&
+        breakIdleState.phaseFrame === 'rgb(201, 173, 198)' &&
+        breakIdleState.idleShortcutHint === 'Ctrl+Shift+F' &&
+        breakIdleState.idleShortcutHintVisible,
+      breakIdleState
+    );
+    await executeInRenderer('window.focusVeilSmoke.setOperationMode(true)');
 
     await sleep(1600);
     const breakVeilState = await executeInRenderer('window.focusVeilSmoke.getState()');
@@ -1435,6 +1474,14 @@ async function runSmoke() {
         focusVeilState.running &&
         focusVeilState.veilTargetPresence === 1 &&
         focusVeilState.veilPresence >= 0.92,
+      focusVeilState
+    );
+    assertSmoke(
+      assertions,
+      'settings frame returns to the focus color',
+      focusVeilState.phase === 'work' &&
+        focusVeilState.phaseFrame === 'rgb(110, 152, 120)' &&
+        focusVeilState.phaseAccent === 'rgb(110, 152, 120)',
       focusVeilState
     );
 

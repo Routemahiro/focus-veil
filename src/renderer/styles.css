@@ -117,8 +117,9 @@ body.overlay-only .overlay-ui {
 }
 
 .timer-panel {
+  --phase-chrome: #6E9878;
   min-width: 112px;
-  border: 1px solid rgba(210, 224, 224, 0.18);
+  border: 1px solid var(--phase-chrome);
   border-radius: 8px;
   color: rgba(244, 250, 248, 0.92);
   background: rgba(20, 29, 31, 0.34);
@@ -130,8 +131,12 @@ body.overlay-only .overlay-ui {
     border-color 160ms ease;
 }
 
+.timer-panel[data-mode="work"] {
+  --phase-chrome: #6E9878;
+}
+
 .timer-panel[data-mode="break"] {
-  border-color: rgba(230, 197, 125, 0.24);
+  --phase-chrome: #C9ADC6;
 }
 
 .timer-line {
@@ -170,7 +175,7 @@ body.overlay-only .overlay-ui {
 .settings-controls input,
 .settings-controls button {
   min-height: 30px;
-  border: 1px solid rgba(219, 232, 229, 0.2);
+  border: 1px solid color-mix(in srgb, var(--phase-chrome) 55%, transparent);
   border-radius: 6px;
   color: rgba(244, 250, 248, 0.94);
   background: rgba(42, 58, 60, 0.72);
@@ -182,7 +187,7 @@ body.overlay-only .overlay-ui {
 .timer-controls button:focus-visible,
 .settings-controls button:hover,
 .settings-controls button:focus-visible {
-  border-color: rgba(130, 207, 196, 0.58);
+  border-color: var(--phase-chrome);
   background: rgba(57, 79, 81, 0.86);
   outline: none;
 }
@@ -226,7 +231,7 @@ body.timer-running .timer-controls button[data-action="start"] {
   width: 100%;
   min-height: 24px;
   padding: 0;
-  accent-color: #9bd8ce;
+  accent-color: var(--phase-chrome);
 }
 
 .number-grid {
@@ -250,7 +255,7 @@ body.timer-running .timer-controls button[data-action="start"] {
 .toggle-line input {
   width: 14px;
   min-height: 14px;
-  accent-color: #9bd8ce;
+  accent-color: var(--phase-chrome);
 }
 
 .manual-update {
@@ -360,7 +365,7 @@ body.operation-mode .overlay-ui {
 body.operation-mode .timer-panel {
   min-width: 272px;
   background: rgba(18, 29, 32, 0.58);
-  border-color: rgba(210, 224, 224, 0.28);
+  border-color: var(--phase-chrome);
 }
 
 body.operation-mode .mode-label {
