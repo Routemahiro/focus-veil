@@ -12,12 +12,12 @@
 
 | コマンド | 結果 | メモ |
 | --- | --- | --- |
-| `node --check src/main.js` | 予定 | 構文確認 |
-| `node --check src/preload.js` | 予定 | 構文確認 |
-| `node --check src/renderer/renderer.js` | 予定 | 構文確認 |
-| `node --check src/auto-update.js` | 予定 | 構文確認 |
-| `node scripts/check-manual-update-state.js` | 予定 | 手動更新の既存確認 |
-| `npm run smoke` | 予定 | 近接フェードと既存 assertion |
+| `node --check src/main.js` | 成功 | 構文OK |
+| `node --check src/preload.js` | 成功 | 構文OK |
+| `node --check src/renderer/renderer.js` | 成功 | 構文OK |
+| `node --check src/auto-update.js` | 成功 | 構文OK |
+| `node scripts/check-manual-update-state.js` | 成功 | 手動更新の既存確認は pass |
+| `npm run smoke` | 成功 | 53 assertion pass。追加: 待機枠はポインタが遠いと濃い、近いと 0.08、離れると戻る、操作パネルは薄くしない。ヴェールと Focus/Break 色の既存 assertion も pass |
 
 ### フェーズで変わる枠色
 
