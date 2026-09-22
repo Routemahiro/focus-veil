@@ -279,6 +279,29 @@ body.timer-running .timer-controls button[data-action="start"] {
   display: none;
 }
 
+.manual-update-prompt {
+  display: grid;
+  gap: 4px;
+}
+
+.manual-update-prompt[hidden] {
+  display: none;
+}
+
+.manual-update-prompt p {
+  margin: 0;
+  color: rgba(218, 234, 231, 0.84);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.manual-update-prompt-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
 .idle-shortcut-hint {
   display: block;
   margin: 0;

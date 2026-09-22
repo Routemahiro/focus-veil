@@ -14,6 +14,10 @@ const updateDownloadFill = document.querySelector('.update-download-fill');
 const manualUpdateControl = document.querySelector('[data-update-control]');
 const manualUpdateButton = document.querySelector('[data-action="check-for-updates"]');
 const manualUpdateNote = document.querySelector('[data-update-state]');
+const releasesPrompt = document.querySelector('[data-releases-prompt]');
+const releasesPromptText = document.querySelector('[data-releases-prompt-text]');
+const openReleasesButton = document.querySelector('[data-action="open-releases"]');
+const dismissReleasesButton = document.querySelector('[data-action="dismiss-releases"]');
 
 const query = new URLSearchParams(window.location.search);
 const isSmoke = query.get('smoke') === '1';
@@ -77,8 +81,10 @@ const state = {
     supported: false,
     phase: 'idle',
     message: '',
-    reason: null
-  }
+    reason: null,
+    offerReleasesPage: false
+  },
+  releasesPageOpened: false
 };
 
 function clamp(value, min, max) {
@@ -789,7 +795,8 @@ function applyUpdateStatus(payload = {}) {
     supported: Boolean(payload.supported),
     phase: typeof payload.phase === 'string' ? payload.phase : 'idle',
     message: typeof payload.message === 'string' ? payload.message : '',
-    reason: payload.reason || null
+    reason: payload.reason || null,
+    offerReleasesPage: payload.offerReleasesPage === true
   };
 
   if (!manualUpdateButton || !manualUpdateNote) {
@@ -798,7 +805,7 @@ function applyUpdateStatus(payload = {}) {
 
   const control = state.updateControl;
   const busy = control.phase === 'checking' || control.phase === 'downloading';
-  manualUpdateButton.disabled = !control.supported || busy;
+  manualUpdateButton.disabled = control.supported ? busy : false;
   manualUpdateButton.textContent =
     control.phase === 'checking'
       ? 'Checking…'
@@ -809,6 +816,10 @@ function applyUpdateStatus(payload = {}) {
   const note = control.message.trim();
   manualUpdateNote.hidden = note.length === 0;
   manualUpdateNote.textContent = note;
+
+  if (releasesPrompt) {
+    releasesPrompt.hidden = !control.offerReleasesPage;
+  }
 }
 
 function applySettings(settingsPatch = {}) {
@@ -914,7 +925,13 @@ function getPublicState() {
       hasControls && manualUpdateNote != null && !manualUpdateNote.hidden,
     manualUpdateUnderAuto:
       document.querySelector('[data-setting="autoUpdateEnabled"]')?.closest('label')
-        ?.nextElementSibling === manualUpdateControl
+        ?.nextElementSibling === manualUpdateControl,
+    releasesPromptVisible:
+      hasControls && releasesPrompt != null && !releasesPrompt.hidden,
+    releasesPromptText: releasesPromptText?.textContent?.trim() || '',
+    releasesPromptHasYes: openReleasesButton != null,
+    releasesPromptHasNo: dismissReleasesButton != null,
+    releasesPageOpened: state.releasesPageOpened === true
   };
 }
 
@@ -958,7 +975,29 @@ manualUpdateButton?.addEventListener('click', async () => {
     applyUpdateStatus({
       supported: state.updateControl.supported,
       phase: 'error',
-      message: 'Update check failed.'
+      message: 'Update check failed.',
+      offerReleasesPage: false
+    });
+  }
+});
+
+openReleasesButton?.addEventListener('click', async () => {
+  try {
+    const result = await window.focusVeil?.openReleasesPage();
+    state.releasesPageOpened = result?.opened === true;
+    applyUpdateStatus(result?.updateControl);
+  } catch {
+    state.releasesPageOpened = false;
+  }
+});
+
+dismissReleasesButton?.addEventListener('click', async () => {
+  try {
+    applyUpdateStatus(await window.focusVeil?.dismissReleasesPrompt());
+  } catch {
+    applyUpdateStatus({
+      ...state.updateControl,
+      offerReleasesPage: false
     });
   }
 });
@@ -1098,6 +1137,10 @@ if (isSmoke) {
     },
     async checkForUpdates() {
       applyUpdateStatus(await window.focusVeil?.checkForUpdates());
+      return getPublicState();
+    },
+    async dismissReleasesPrompt() {
+      applyUpdateStatus(await window.focusVeil?.dismissReleasesPrompt());
       return getPublicState();
     }
   };

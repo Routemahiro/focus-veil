@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('focusVeil', {
   updateSettings: (patch) => ipcRenderer.invoke('focus-veil:update-settings', patch),
   timerCommand: (action) => ipcRenderer.invoke('focus-veil:timer-command', action),
   checkForUpdates: () => ipcRenderer.invoke('focus-veil:check-for-updates'),
+  openReleasesPage: () => ipcRenderer.invoke('focus-veil:open-releases-page'),
+  dismissReleasesPrompt: () => ipcRenderer.invoke('focus-veil:dismiss-releases-prompt'),
   onOperationModeChanged: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('focus-veil:operation-mode', listener);

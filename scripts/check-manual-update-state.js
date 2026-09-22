@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { createAutoUpdateController } = require('../src/auto-update');
+const { createAutoUpdateController, releasesPageUrl } = require('../src/auto-update');
 
 function createFakeUpdater() {
   const handlers = {};
@@ -76,6 +76,9 @@ async function testManualCheckWhileAutoOffDownloads() {
   assert.equal(status.downloadedOrigin, 'manual');
   assert.equal(status.transferring, false);
   assert.equal(status.message, 'Downloaded. Use Restart to Update.');
+  assert.equal(status.offerReleasesPage, false);
+  assert.equal(status.releasesUrl, null);
+  assert.equal(controller.resolveReleasesPrompt(true), null);
   assert.ok(seen.includes(42));
   assert.equal(controller.quitAndInstall(), true);
   assert.equal(updater.quitCalled, true);
@@ -127,12 +130,32 @@ async function testCheckFailureDoesNotLeaveProgress() {
   assert.equal(status.message, 'Update check failed.');
 }
 
+function assertReleasesPromptWaitsForYes(controller, status) {
+  assert.equal(status.offerReleasesPage, true);
+  assert.equal(status.releasesUrl, releasesPageUrl);
+  assert.equal(controller.resolveReleasesPrompt(false), null);
+  const declined = controller.getUpdateControl();
+  assert.equal(declined.offerReleasesPage, false);
+  assert.equal(declined.releasesUrl, null);
+  assert.match(declined.message, /Setup installer/);
+
+  return controller.requestManualCheck().then((again) => {
+    assert.equal(again.offerReleasesPage, true);
+    assert.equal(controller.resolveReleasesPrompt(true), releasesPageUrl);
+    assert.equal(controller.getUpdateControl().offerReleasesPage, false);
+    assert.equal(controller.resolveReleasesPrompt(true), null);
+  });
+}
+
 async function testPortableCannotInstall() {
   const controller = createController(null, {
     env: { PORTABLE_EXECUTABLE_FILE: 'FocusVeil-Portable.exe' },
     forbidLoad: true
   });
   controller.start({ autoUpdateEnabled: true });
+  const before = controller.getUpdateControl();
+  assert.equal(before.offerReleasesPage, false);
+  assert.match(before.message, /Setup installer/);
   const status = await controller.requestManualCheck();
   assert.equal(status.supported, false);
   assert.equal(status.reason, 'portable');
@@ -142,6 +165,7 @@ async function testPortableCannotInstall() {
   assert.match(status.message, /Setup installer/);
   assert.equal(status.trayLabel, 'Portable build cannot update');
   assert.equal(controller.quitAndInstall(), false);
+  await assertReleasesPromptWaitsForYes(controller, status);
 }
 
 async function testNpmStartCannotInstall() {
@@ -151,13 +175,17 @@ async function testNpmStartCannotInstall() {
     forbidLoad: true
   });
   controller.start({ autoUpdateEnabled: true });
+  const before = controller.getUpdateControl();
+  assert.equal(before.offerReleasesPage, false);
   const status = await controller.requestManualCheck();
   assert.equal(status.supported, false);
   assert.equal(status.reason, 'dev');
   assert.equal(status.phase, 'unavailable');
   assert.equal(status.transferring, false);
   assert.match(status.message, /npm start cannot install updates/);
+  assert.match(status.message, /Setup installer/);
   assert.equal(status.trayLabel, 'npm start cannot update');
+  await assertReleasesPromptWaitsForYes(controller, status);
 }
 
 async function main() {

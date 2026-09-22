@@ -1,4 +1,5 @@
 const firstCheckDelayMs = 10_000;
+const releasesPageUrl = 'https://github.com/Routemahiro/focus-veil/releases/latest';
 
 function isPortableBuild(env = process.env) {
   return Boolean(env.PORTABLE_EXECUTABLE_DIR || env.PORTABLE_EXECUTABLE_FILE);
@@ -23,6 +24,7 @@ function createAutoUpdateController({
   let onDownloadProgress = null;
   let phase = 'idle';
   let message = '';
+  let offerReleasesPage = false;
   let downloadProgress = {
     transferring: false,
     percent: 0
@@ -85,6 +87,13 @@ function createAutoUpdateController({
 
   function isEnabled() {
     return settings.autoUpdateEnabled === true;
+  }
+
+  function releasesFields() {
+    return {
+      offerReleasesPage: offerReleasesPage === true,
+      releasesUrl: offerReleasesPage ? releasesPageUrl : null
+    };
   }
 
   function describeUnavailable() {
@@ -153,7 +162,8 @@ function createAutoUpdateController({
         downloadedVersion: null,
         downloadedOrigin: null,
         transferring: progress.transferring,
-        percent: progress.percent
+        percent: progress.percent,
+        ...releasesFields()
       };
     }
 
@@ -166,7 +176,8 @@ function createAutoUpdateController({
       downloadedVersion,
       downloadedOrigin,
       transferring: progress.transferring,
-      percent: progress.percent
+      percent: progress.percent,
+      ...releasesFields()
     };
   }
 
@@ -280,10 +291,11 @@ function createAutoUpdateController({
     });
   }
 
-  function markUnavailable() {
+  function markUnavailable({ offerReleases = false } = {}) {
     downloadedVersion = null;
     downloadedOrigin = null;
     checkOrigin = null;
+    offerReleasesPage = Boolean(offerReleases);
     phase = 'unavailable';
     message = describeUnavailable().message;
 
@@ -320,6 +332,7 @@ function createAutoUpdateController({
     downloadedVersion = null;
     downloadedOrigin = null;
     checkOrigin = null;
+    offerReleasesPage = false;
     setDownloadProgress({ transferring: false, percent: 0 });
 
     if (canInstallUpdates()) {
@@ -340,9 +353,11 @@ function createAutoUpdateController({
 
   function runCheck(origin) {
     if (!canInstallUpdates()) {
-      markUnavailable();
+      markUnavailable({ offerReleases: origin === 'manual' });
       return Promise.resolve(getUpdateControl());
     }
+
+    offerReleasesPage = false;
 
     if (origin !== 'manual' && !isEnabled()) {
       return Promise.resolve(getUpdateControl());
@@ -392,6 +407,21 @@ function createAutoUpdateController({
 
   function requestManualCheck() {
     return runCheck('manual');
+  }
+
+  function resolveReleasesPrompt(confirmed) {
+    if (confirmed === true && offerReleasesPage) {
+      offerReleasesPage = false;
+      notifyStateChange();
+      return releasesPageUrl;
+    }
+
+    if (offerReleasesPage) {
+      offerReleasesPage = false;
+      notifyStateChange();
+    }
+
+    return null;
   }
 
   function scheduleCheck() {
@@ -488,6 +518,7 @@ function createAutoUpdateController({
     quitAndInstall,
     checkNow,
     requestManualCheck,
+    resolveReleasesPrompt,
     getTrayState,
     getUpdateControl,
     getDownloadProgress,
@@ -501,5 +532,6 @@ function createAutoUpdateController({
 
 module.exports = {
   createAutoUpdateController,
-  isPortableBuild
+  isPortableBuild,
+  releasesPageUrl
 };
