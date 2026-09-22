@@ -42,6 +42,10 @@ const activeDrawInterval = 32;
 const idleDrawInterval = 100;
 const activeAfterInputMs = 1500;
 const veilFadeMs = 560;
+const idleTimerNearOpacity = 0.08;
+const idleTimerFarOpacity = 1;
+const idleTimerNearDistance = 16;
+const idleTimerFarDistance = 132;
 
 const state = {
   operationMode: false,
@@ -84,7 +88,8 @@ const state = {
     reason: null,
     offerReleasesPage: false
   },
-  releasesPageOpened: false
+  releasesPageOpened: false,
+  timerPanelProximityOpacity: idleTimerFarOpacity
 };
 
 function clamp(value, min, max) {
@@ -93,6 +98,41 @@ function clamp(value, min, max) {
 
 function lerp(current, target, blend) {
   return current + (target - current) * blend;
+}
+
+function distanceToRect(x, y, rect) {
+  const dx = x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0;
+  const dy = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+  return Math.hypot(dx, dy);
+}
+
+function idleTimerProximityOpacity(distance) {
+  if (state.operationMode || !hasControls) {
+    return idleTimerFarOpacity;
+  }
+
+  if (distance <= idleTimerNearDistance) {
+    return idleTimerNearOpacity;
+  }
+
+  if (distance >= idleTimerFarDistance) {
+    return idleTimerFarOpacity;
+  }
+
+  const t = (distance - idleTimerNearDistance) / (idleTimerFarDistance - idleTimerNearDistance);
+  return lerp(idleTimerNearOpacity, idleTimerFarOpacity, t * t);
+}
+
+function updateIdleTimerProximity() {
+  if (!timerPanel) {
+    state.timerPanelProximityOpacity = idleTimerFarOpacity;
+    return;
+  }
+
+  const rect = timerPanel.getBoundingClientRect();
+  const opacity = idleTimerProximityOpacity(distanceToRect(state.mouseX, state.mouseY, rect));
+  state.timerPanelProximityOpacity = opacity;
+  timerPanel.style.setProperty('--timer-proximity-opacity', opacity.toFixed(3));
 }
 
 function sanitizeLocalRect(rect) {
@@ -154,6 +194,7 @@ function resizeCanvas() {
 function setOperationMode(enabled) {
   state.operationMode = enabled;
   body.classList.toggle('operation-mode', enabled);
+  updateIdleTimerProximity();
   requestActiveFrame(500);
 }
 
@@ -873,6 +914,7 @@ function requestSettingsUpdate(patch) {
 }
 
 function getPublicState() {
+  updateIdleTimerProximity();
   const phaseAccentTarget = document.querySelector('.settings-controls input[type="range"]');
   return {
     operationMode: state.operationMode,
@@ -919,6 +961,9 @@ function getPublicState() {
       !updateDownloadBar.hidden &&
       getComputedStyle(updateDownloadBar).display !== 'none',
     timerPanelWidth: timerPanel ? Number(timerPanel.getBoundingClientRect().width.toFixed(1)) : 0,
+    timerPanelOpacity: timerPanel
+      ? Number(Number(getComputedStyle(timerPanel).opacity).toFixed(3))
+      : 1,
     phaseFrame: timerPanel ? getComputedStyle(timerPanel).borderTopColor : '',
     phaseAccent: phaseAccentTarget ? getComputedStyle(phaseAccentTarget).accentColor : '',
     manualUpdateText: manualUpdateButton?.textContent?.trim() || '',
@@ -1022,6 +1067,7 @@ window.addEventListener('resize', () => {
   state.activeWindowRect = sanitizeLocalRect(state.activeWindowRect);
   state.activeWindowTargetPresence = state.activeWindowTargetRect ? 1 : 0;
   lastDraw = 0;
+  updateIdleTimerProximity();
   requestActiveFrame(500);
 });
 
@@ -1030,6 +1076,7 @@ window.addEventListener('mousemove', (event) => {
   state.mouseX = event.clientX;
   state.mouseY = event.clientY;
   state.lastMouseMoveAt = now;
+  updateIdleTimerProximity();
   notifyCursorActivity(now);
   requestActiveFrame(activeAfterInputMs);
 });
@@ -1105,6 +1152,7 @@ if (isSmoke) {
       state.spotX = x;
       state.spotY = y;
       state.lastMouseMoveAt = performance.now();
+      updateIdleTimerProximity();
       requestActiveFrame(500);
       return getPublicState();
     },
@@ -1152,4 +1200,5 @@ if (isSmoke) {
 resizeCanvas();
 updateTimerUi();
 syncSettingsControls();
+updateIdleTimerProximity();
 startAnimationLoop(true);
