@@ -85,7 +85,7 @@ FOCUS_VEIL_READY display-...
 | `Ripple effects` | 水面の揺らぎと薄い波紋 | 既定 ON。不要ならOFF。暗幕やスポットは残る |
 | `Overlay enabled` | 暗幕とスポットライトを有効化 | 一時的に消したい時はOFF |
 | `Auto-update` | GitHub Releases から Setup 更新を自動確認 | 既定 ON。切ると自動の確認とダウンロードはしない |
-| `Check for updates` | 今すぐ GitHub Releases を確認して落とす | Auto-update の直下。ON/OFF とは別。ポータブルと `npm start` では入れられず、その旨を表示する |
+| `Check for updates` | 今すぐ GitHub Releases を確認して落とす | Auto-update の直下。ON/OFF とは別。ポータブルと `npm start` では入れられず、その旨を表示してから Releases を開くか聞く |
 
 ### トレイメニュー
 
@@ -154,8 +154,9 @@ FOCUS_VEIL_READY display-...
 - 既定は ON。起動後に `Routemahiro/focus-veil` の GitHub Releases を見にいく。
 - OFF にすると自動の確認とダウンロードはしない。途中で切った場合も、終了時にインストーラーは起動しない。
 - `Check for updates` は Auto-update の直下（操作メニューとトレイ）にあり、ON/OFF とは別に今すぐ確認する。更新があれば同じ進捗バーで落とす。
-- ポータブル EXE で押してもダウンロードは始まらない。表示は `Portable builds cannot install updates. Use the Setup installer.` トレイは `Portable build cannot update`。
-- `npm start` で押してもダウンロードは始まらない。表示は `npm start cannot install updates. Use the Setup installer.` トレイは `npm start cannot update`。
+- ポータブル EXE で押してもダウンロードは始まらない。表示は `Portable builds cannot install updates. Use the Setup installer.` トレイは `Portable build cannot update`。続けて `Open the GitHub Releases page?` と聞く。Yes まで https://github.com/Routemahiro/focus-veil/releases/latest は開かない。No なら閉じるだけ。
+- `npm start` で押してもダウンロードは始まらない。表示は `npm start cannot install updates. Use the Setup installer.` トレイは `npm start cannot update`。聞く内容はポータブルと同じで、Yes までブラウザは開かない。
+- トレイから押したときも同じ質問を操作メニューに出す。インストール済み Setup ではこの質問は出さず、今までどおり確認して落とす。
 - 更新が入ったらトレイに `Restart to Update` が出る。Auto-update が ON のとき、Quit 時にも適用する。手動確認で落とした場合は `Restart to Update` から入れる。
 - ダウンロード中だけ、右下のコンパクトタイマーの下に細い進捗バーが出る。終わると消える。
 - 未署名のため、更新インストーラーでも SmartScreen / 「不明な発行元」が出ることがある。詳細情報 → 実行。

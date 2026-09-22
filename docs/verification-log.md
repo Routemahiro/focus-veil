@@ -2,6 +2,23 @@
 
 ## 2026-09-22
 
+### ポータブルの Releases 確認
+
+- ポータブルと `npm start` の `Check for updates` は、Setup が必要な旨を残したまま `Open the GitHub Releases page?` を出す。
+- Yes まで https://github.com/Routemahiro/focus-veil/releases/latest は開かない。No は質問だけ閉じる。
+- インストール済み Setup の確認、進捗バー、`Restart to Update`、Auto-update の ON/OFF は変えない。
+
+#### 実行コマンド
+
+| コマンド | 結果 | メモ |
+| --- | --- | --- |
+| `node --check src/main.js` | 成功 | 構文OK |
+| `node --check src/preload.js` | 成功 | 構文OK |
+| `node --check src/renderer/renderer.js` | 成功 | 構文OK |
+| `node --check src/auto-update.js` | 成功 | 構文OK |
+| `node scripts/check-manual-update-state.js` | 成功 | ポータブルと npm start は No で URL を返さず、Yes でだけ URL を返す。Setup の手動確認は Releases を開かない |
+| `npm run smoke` | 成功 | 44 assertion pass。追加: Check の前は質問しない、npm start は Setup の旨と質問を出し Yes まで開かない、No でも開かない。既存の更新バー、待機ヒント、Motion highlight 削除、Ripple、ヴェールフェード、タイマーループも pass |
+
 ### 手動の更新確認
 
 - Auto-update の直下に `Check for updates` を追加。操作メニューとトレイの両方。
