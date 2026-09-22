@@ -102,6 +102,12 @@
             <input type="checkbox" data-setting="autoUpdateEnabled" checked>
             <span>Auto-update</span>
           </label>
+          <div class="manual-update" data-update-control>
+            <button type="button" data-action="check-for-updates" title="Check GitHub Releases now">
+              Check for updates
+            </button>
+            <p id="manual-update-state" class="manual-update-state" data-update-state hidden></p>
+          </div>
         </div>
         <p class="idle-shortcut-hint">Ctrl+Shift+F</p>
         <div
