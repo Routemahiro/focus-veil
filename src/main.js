@@ -1080,6 +1080,52 @@ async function runSmoke() {
         normalState.updateDownloadPercent === 0,
       normalState
     );
+    assertSmoke(
+      assertions,
+      'idle waiting frame stays solid when the pointer is away',
+      !normalState.operationMode &&
+        Math.abs(normalState.mouseX - 640) < 2 &&
+        Math.abs(normalState.mouseY - 360) < 2 &&
+        normalState.timerPanelOpacity >= 0.95 &&
+        normalState.veilPresence >= 0.92,
+      normalState
+    );
+
+    await executeInRenderer(`
+      (() => {
+        const rect = document.querySelector('.timer-panel').getBoundingClientRect();
+        return window.focusVeilSmoke.setMouse(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2
+        );
+      })()
+    `);
+    await sleep(200);
+    const nearTimerState = await executeInRenderer('window.focusVeilSmoke.getState()');
+    assertSmoke(
+      assertions,
+      'idle waiting frame fades when the pointer is nearby',
+      !nearTimerState.operationMode &&
+        nearTimerState.timerPanelOpacity <= 0.14 &&
+        nearTimerState.timerPanelOpacity >= 0.03 &&
+        nearTimerState.veilPresence >= 0.92 &&
+        nearTimerState.veilTargetPresence === 1 &&
+        nearTimerState.phaseFrame === 'rgb(110, 152, 120)',
+      nearTimerState
+    );
+
+    await executeInRenderer('window.focusVeilSmoke.setMouse(640, 360)');
+    await sleep(200);
+    const awayTimerState = await executeInRenderer('window.focusVeilSmoke.getState()');
+    assertSmoke(
+      assertions,
+      'idle waiting frame restores when the pointer leaves',
+      !awayTimerState.operationMode &&
+        awayTimerState.timerPanelOpacity >= 0.95 &&
+        awayTimerState.veilPresence >= 0.92 &&
+        awayTimerState.phaseFrame === 'rgb(110, 152, 120)',
+      awayTimerState
+    );
 
     await executeInRenderer('window.focusVeilSmoke.setActiveDisplay(false)');
     await sleep(480);
@@ -1241,6 +1287,28 @@ async function runSmoke() {
       operationState.operationMode && operationState.controlsVisible,
       operationState
     );
+
+    await executeInRenderer(`
+      (() => {
+        const rect = document.querySelector('.timer-panel').getBoundingClientRect();
+        return window.focusVeilSmoke.setMouse(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2
+        );
+      })()
+    `);
+    await sleep(200);
+    const operationNearState = await executeInRenderer('window.focusVeilSmoke.getState()');
+    assertSmoke(
+      assertions,
+      'operation panel stays solid when the pointer is nearby',
+      operationNearState.operationMode &&
+        operationNearState.timerPanelOpacity >= 0.95 &&
+        operationNearState.phaseFrame === 'rgb(110, 152, 120)' &&
+        operationNearState.veilPresence >= 0.92,
+      operationNearState
+    );
+    await executeInRenderer('window.focusVeilSmoke.setMouse(640, 360)');
     assertSmoke(
       assertions,
       'settings frame and accent use the focus color',

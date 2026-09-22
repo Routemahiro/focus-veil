@@ -125,10 +125,12 @@ body.overlay-only .overlay-ui {
   background: rgba(20, 29, 31, 0.34);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
   backdrop-filter: blur(8px);
+  opacity: var(--timer-proximity-opacity, 1);
   transition:
     min-width 160ms ease,
     background-color 160ms ease,
-    border-color 160ms ease;
+    border-color 160ms ease,
+    opacity 140ms ease;
 }
 
 .timer-panel[data-mode="work"] {
@@ -366,6 +368,7 @@ body.operation-mode .timer-panel {
   min-width: 272px;
   background: rgba(18, 29, 32, 0.58);
   border-color: var(--phase-chrome);
+  opacity: 1;
 }
 
 body.operation-mode .mode-label {
