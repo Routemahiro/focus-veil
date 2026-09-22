@@ -873,6 +873,7 @@ function requestSettingsUpdate(patch) {
 }
 
 function getPublicState() {
+  const phaseAccentTarget = document.querySelector('.settings-controls input[type="range"]');
   return {
     operationMode: state.operationMode,
     displayKey,
@@ -918,6 +919,8 @@ function getPublicState() {
       !updateDownloadBar.hidden &&
       getComputedStyle(updateDownloadBar).display !== 'none',
     timerPanelWidth: timerPanel ? Number(timerPanel.getBoundingClientRect().width.toFixed(1)) : 0,
+    phaseFrame: timerPanel ? getComputedStyle(timerPanel).borderTopColor : '',
+    phaseAccent: phaseAccentTarget ? getComputedStyle(phaseAccentTarget).accentColor : '',
     manualUpdateText: manualUpdateButton?.textContent?.trim() || '',
     manualUpdateDisabled: Boolean(manualUpdateButton?.disabled),
     manualUpdateNote: manualUpdateNote?.textContent?.trim() || '',

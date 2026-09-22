@@ -30,7 +30,7 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 普段使いは GitHub Releases の EXE。git / npm は不要。
 
-1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.7.exe` または `FocusVeil-Portable-0.1.7.exe` を落とす。
+1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.8.exe` または `FocusVeil-Portable-0.1.8.exe` を落とす。
 2. 未署名のため SmartScreen / 「不明な発行元」が出ることがある。詳細を開いて実行する。
 3. インストーラーはスタートメニューに `Focus Veil` を追加する。ポータブルはファイルをダブルクリックする。
 4. 画面にヴェールが乗る。終了はトレイの `Quit`。
@@ -70,7 +70,7 @@ FOCUS_VEIL_READY display-...
 
 ### 右下パネル
 
-通常時は、右下に残り時間と小さな `Ctrl+Shift+F` が出ます。操作モードでは次のコントロールが表示されます。パネル右下に `ショートカット：Ctrl+Shift+F` も出ます。
+通常時は、右下に残り時間と小さな `Ctrl+Shift+F` が出ます。この待機枠と、操作モードの設定パネルの枠・スライダー・チェックの色はフェーズに従います。Focus は `#6E9878`、Break は `#C9ADC6` です。全画面のヴェール自体の色は変えません。操作モードでは次のコントロールが表示されます。パネル右下に `ショートカット：Ctrl+Shift+F` も出ます。
 
 | 項目 | 内容 | 目安 |
 | --- | --- | --- |
