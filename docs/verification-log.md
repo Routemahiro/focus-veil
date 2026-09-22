@@ -2,6 +2,23 @@
 
 ## 2026-09-22
 
+### フェーズで変わる枠色
+
+- 待機中のコンパクトタイマーと、操作メニューの設定パネルの枠をフェーズで変える。スライダーとチェックのアクセントも同じ色。
+- Focus `#6E9878`、Break `#C9ADC6`。
+- 全画面ヴェールの塗りは変えない。ヴェールフェード、タイマーループ、待機中の `Ctrl+Shift+F`、更新プログレスバー、手動の `Check for updates` はそのまま。バージョン上げなし。Release なし。
+
+#### 実行コマンド
+
+| コマンド | 結果 | メモ |
+| --- | --- | --- |
+| `node --check src/main.js` | 成功 | 構文OK |
+| `node --check src/preload.js` | 成功 | 構文OK |
+| `node --check src/renderer/renderer.js` | 成功 | 構文OK |
+| `node --check src/auto-update.js` | 成功 | 構文OK |
+| `node scripts/check-manual-update-state.js` | 成功 | 手動更新の既存確認は pass |
+| `npm run smoke` | 成功 | 49 assertion pass。追加: 待機枠と設定の Focus/Break 色。既存の更新バー、待機ヒント、手動更新、Motion highlight 削除、Ripple、ヴェールフェード、タイマーループも pass |
+
 ### ポータブルの Releases 確認
 
 - ポータブルと `npm start` の `Check for updates` は、Setup が必要な旨を残したまま `Open the GitHub Releases page?` を出す。

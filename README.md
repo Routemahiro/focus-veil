@@ -46,9 +46,9 @@ npm run smoke
 
 ## 基本操作
 
-- 通常時: 画面右下に残り時間と小さな `Ctrl+Shift+F` ヒントを表示します。ウィンドウはクリック透過です。タイマーは止まらず Focus / Break を繰り返し、切れ目で全画面のヴェールがふわっと切替わります。
+- 通常時: 画面右下に残り時間と小さな `Ctrl+Shift+F` ヒントを表示します。待機枠の色は Focus `#6E9878`、Break `#C9ADC6` です。ウィンドウはクリック透過です。タイマーは止まらず Focus / Break を繰り返し、切れ目で全画面のヴェールがふわっと切替わります。ヴェール自体の色はフェーズでは変えません。
 - 注目スポット: メインの明るい領域はマウス周辺に残ります。
-- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Auto-update、その直下の `Check for updates` を表示し、クリックできます。
+- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Auto-update、その直下の `Check for updates` を表示し、クリックできます。設定パネルの枠とスライダー、チェックの色も待機枠と同じく Focus `#6E9878` / Break `#C9ADC6` です。
 - 操作モード終了: `Ctrl+Shift+F` で再切り替え、操作モード中に `Esc`、またはメニュー外をクリック。
 - オーバーレイ再配置: `Ctrl+Shift+R`。Windows仮想デスクトップ切り替え後に表示が戻らない場合の復帰用です。
 - トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Ripple effects、Auto-update、その直下の `Check for updates`、Veil Strength、再配置、終了を操作できます。更新を入れたあとは `Restart to Update` も出ます。

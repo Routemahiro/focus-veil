@@ -61,7 +61,7 @@ IPCはoverlay windowかつ `renderer/index.html` からのsenderだけを受け�
 
 BrowserWindowは `transparent: true`、`frame: false`、`skipTaskbar: true`、`focusable: false`、`alwaysOnTop: true` を基準にしています。以前は `screen.getAllDisplays()` から仮想ディスプレイ全体の大きな矩形を作っていましたが、Windowsでは片側モニターだけに見えるケースがあったため、現在は各displayのboundsごとに1枚ずつoverlay windowを作ります。
 
-タイマー状態はメインプロセスで一元管理し、全overlay windowへIPCで同期します。これにより、複数ディスプレイでも残り時間と通知演出がずれません。フェーズが終わっても running は維持し、Focus → Break → Focus とループします。レンダラーは `veilPresence` を約0.56秒の時定数で補間し、Break入りで全画面のヴェールをふわっと消し、Focus戻りでふわっと戻します。Overlay enabled を切ったときだけ、従来どおり即クリアします。操作UIはprimary displayのoverlayだけに表示し、他のdisplayは操作モード中もクリック透過を維持します。
+タイマー状態はメインプロセスで一元管理し、全overlay windowへIPCで同期します。これにより、複数ディスプレイでも残り時間と通知演出がずれません。フェーズが終わっても running は維持し、Focus → Break → Focus とループします。レンダラーは `veilPresence` を約0.56秒の時定数で補間し、Break入りで全画面のヴェールをふわっと消し、Focus戻りでふわっと戻します。待機中のコンパクトタイマーと操作メニューの枠・アクセントはフェーズ色で、Focus `#6E9878`、Break `#C9ADC6` です。ヴェールの塗りは変えません。Overlay enabled を切ったときだけ、従来どおり即クリアします。操作UIはprimary displayのoverlayだけに表示し、他のdisplayは操作モード中もクリック透過を維持します。
 
 各BrowserWindowには `setContentProtection(true)` を指定しています。外部スクリーンショットや画面共有にヴェールが写らない場合があります。
 
