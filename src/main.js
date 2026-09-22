@@ -9,6 +9,7 @@ const {
   Menu,
   nativeImage,
   session,
+  shell,
   Tray,
   screen
 } = require('electron');
@@ -44,6 +45,7 @@ const defaultSettings = {
 
 const overlayWindows = new Map();
 const autoUpdate = createAutoUpdateController({ app, isSmoke });
+let releasesPageOpenCount = 0;
 
 let controlWindow = null;
 let tray = null;
@@ -201,7 +203,7 @@ function broadcastSettings(source = 'main') {
 
 function broadcastUpdateDownload(source = 'main') {
   const payload = {
-    ...autoUpdate.getDownloadProgress(),
+    ...autoUpdate.getUpdateControl(),
     source
   };
 
@@ -806,9 +808,31 @@ function formatTrayTime() {
     .padStart(2, '0')}`;
 }
 
+function buildManualUpdateTrayItem() {
+  const updateState = autoUpdate.getTrayState();
+  const busy = updateState.phase === 'checking' || updateState.phase === 'downloading';
+  const canAskForReleases = updateState.supported === false;
+
+  return {
+    label: updateState.trayLabel,
+    enabled: canAskForReleases || (updateState.supported && !busy),
+    click: () => {
+      autoUpdate.requestManualCheck().then((status) => {
+        if (status?.offerReleasesPage) {
+          setOperationMode(true, 'manual-update');
+        }
+      });
+    }
+  };
+}
+
 function buildUpdateTrayItems() {
   const updateState = autoUpdate.getTrayState();
-  if (!updateState.downloadedVersion || !updateState.enabled || !updateState.supported) {
+  if (!updateState.downloadedVersion || !updateState.supported) {
+    return [];
+  }
+
+  if (!updateState.enabled && updateState.downloadedOrigin !== 'manual') {
     return [];
   }
 
@@ -868,6 +892,7 @@ function updateTrayMenu() {
       checked: settings.autoUpdateEnabled,
       click: (item) => updateSettings({ autoUpdateEnabled: item.checked }, 'tray')
     },
+    buildManualUpdateTrayItem(),
     {
       label: 'Veil Strength',
       submenu: [
@@ -1227,6 +1252,55 @@ async function runSmoke() {
       { autoUpdateLabel }
     );
 
+    const beforeReleasesPrompt = await executeInRenderer('window.focusVeilSmoke.getState()');
+    assertSmoke(
+      assertions,
+      'npm start does not ask to open GitHub Releases before Check for updates',
+      !beforeReleasesPrompt.releasesPromptVisible && beforeReleasesPrompt.releasesPageOpened === false,
+      beforeReleasesPrompt
+    );
+
+    const manualUpdateState = await executeInRenderer('window.focusVeilSmoke.checkForUpdates()');
+    assertSmoke(
+      assertions,
+      'operation menu places Check for updates under Auto-update',
+      manualUpdateState.manualUpdateUnderAuto &&
+        manualUpdateState.manualUpdateText === 'Check for updates' &&
+        manualUpdateState.settings.autoUpdateEnabled === true,
+      manualUpdateState
+    );
+    assertSmoke(
+      assertions,
+      'npm start manual check asks before opening GitHub Releases',
+      !manualUpdateState.manualUpdateDisabled &&
+        manualUpdateState.manualUpdateNoteVisible &&
+        manualUpdateState.manualUpdateNote.includes('npm start cannot install updates') &&
+        manualUpdateState.manualUpdateNote.includes('Setup installer') &&
+        manualUpdateState.releasesPromptVisible &&
+        manualUpdateState.releasesPromptText === 'Open the GitHub Releases page?' &&
+        manualUpdateState.releasesPromptHasYes &&
+        manualUpdateState.releasesPromptHasNo &&
+        manualUpdateState.releasesPageOpened === false &&
+        !manualUpdateState.updateDownloadTransferring &&
+        !manualUpdateState.updateDownloadBarVisible &&
+        manualUpdateState.updateDownloadPercent === 0,
+      manualUpdateState
+    );
+
+    const declinedReleasesState = await executeInRenderer(
+      'window.focusVeilSmoke.dismissReleasesPrompt()'
+    );
+    assertSmoke(
+      assertions,
+      'No leaves the GitHub Releases page closed',
+      !declinedReleasesState.releasesPromptVisible &&
+        declinedReleasesState.releasesPageOpened === false &&
+        declinedReleasesState.manualUpdateNote.includes('npm start cannot install updates') &&
+        declinedReleasesState.manualUpdateNote.includes('Setup installer') &&
+        releasesPageOpenCount === 0,
+      { declinedReleasesState, releasesPageOpenCount }
+    );
+
     const rippleLabel = await executeInRenderer(
       'document.querySelector(\'[data-setting="rippleEnabled"]\')?.closest("label")?.innerText?.trim() || ""'
     );
@@ -1489,7 +1563,7 @@ function createOverlayWindow(descriptor) {
       source: 'ready'
     });
     sendToWindow(win, 'focus-veil:update-download', {
-      ...autoUpdate.getDownloadProgress(),
+      ...autoUpdate.getUpdateControl(),
       source: 'ready'
     });
     broadcastActiveWindowState('ready', { force: true });
@@ -1513,7 +1587,7 @@ function createOverlayWindow(descriptor) {
       source: 'load'
     });
     sendToWindow(win, 'focus-veil:update-download', {
-      ...autoUpdate.getDownloadProgress(),
+      ...autoUpdate.getUpdateControl(),
       source: 'load'
     });
     broadcastActiveWindowState('load', { force: true });
@@ -1620,6 +1694,7 @@ ipcMain.handle('focus-veil:get-main-state', (event) => {
     settings: getSettingsSnapshot(),
     timer: getTimerSnapshot(),
     updateDownload: autoUpdate.getDownloadProgress(),
+    updateControl: autoUpdate.getUpdateControl(),
     overlays: getOverlayList().map((win) => ({
       key: win.focusVeilKey,
       controls: Boolean(win.focusVeilControls),
@@ -1636,6 +1711,29 @@ ipcMain.handle('focus-veil:timer-command', (event, action) => {
 ipcMain.handle('focus-veil:update-settings', (event, patch) => {
   assertTrustedIpcEvent(event);
   return updateSettings(patch, 'renderer');
+});
+
+ipcMain.handle('focus-veil:check-for-updates', (event) => {
+  assertTrustedIpcEvent(event);
+  return autoUpdate.requestManualCheck();
+});
+
+ipcMain.handle('focus-veil:open-releases-page', async (event) => {
+  assertTrustedIpcEvent(event);
+  const url = autoUpdate.resolveReleasesPrompt(true);
+  if (!url) {
+    return { opened: false, updateControl: autoUpdate.getUpdateControl() };
+  }
+
+  releasesPageOpenCount += 1;
+  await shell.openExternal(url);
+  return { opened: true, updateControl: autoUpdate.getUpdateControl() };
+});
+
+ipcMain.handle('focus-veil:dismiss-releases-prompt', (event) => {
+  assertTrustedIpcEvent(event);
+  autoUpdate.resolveReleasesPrompt(false);
+  return autoUpdate.getUpdateControl();
 });
 
 ipcMain.handle('focus-veil:debug-update-download', (event, progress) => {
@@ -1666,7 +1764,10 @@ app.whenReady().then(async () => {
   }
 
   await loadSettings();
-  autoUpdate.setOnStateChange(updateTrayMenu);
+  autoUpdate.setOnStateChange(() => {
+    updateTrayMenu();
+    broadcastUpdateDownload('state');
+  });
   autoUpdate.setOnDownloadProgress(() => {
     broadcastUpdateDownload('progress');
   });

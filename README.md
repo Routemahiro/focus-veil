@@ -11,12 +11,12 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 git / npm なしで使う場合は、GitHub Releases の未署名 EXE を使う。
 
 - 最新版: https://github.com/Routemahiro/focus-veil/releases/latest
-- インストーラー: `FocusVeil-Setup-0.1.6.exe`（スタートメニューに追加。管理者権限は不要）
-- ポータブル: `FocusVeil-Portable-0.1.6.exe`（展開せずに実行）
+- インストーラー: `FocusVeil-Setup-0.1.7.exe`（スタートメニューに追加。管理者権限は不要）
+- ポータブル: `FocusVeil-Portable-0.1.7.exe`（展開せずに実行）
 
 Windows が SmartScreen や「不明な発行元」を出したら、詳細を開いて実行する。コード署名はない。終了はトレイの `Quit`。
 
-自動更新は **インストール済み Setup** だけが対象。既定は ON で、GitHub Releases を確認して次の Setup を入れる。ポータブル EXE は自動更新しない。切るときは操作メニューまたはトレイの `Auto-update`。更新インストーラーでも SmartScreen が出ることがある。
+自動更新は **インストール済み Setup** だけが対象。既定は ON で、GitHub Releases を確認して次の Setup を入れる。切るときは操作メニューまたはトレイの `Auto-update`。待っていても入らないときは、その直下の `Check for updates` で今すぐ確認する。ポータブル EXE と `npm start` は electron-updater で入れられないので、ボタンはダウンロードせずその旨を出し、GitHub Releases を開くか聞く。開くのは Yes のときだけ。更新インストーラーでも SmartScreen が出ることがある。
 
 操作モードは `Ctrl+Shift+F`。メニュー外クリック、もう一度ショートカット、または `Esc` で閉じる。
 
@@ -48,12 +48,12 @@ npm run smoke
 
 - 通常時: 画面右下に残り時間と小さな `Ctrl+Shift+F` ヒントを表示します。ウィンドウはクリック透過です。タイマーは止まらず Focus / Break を繰り返し、切れ目で全画面のヴェールがふわっと切替わります。
 - 注目スポット: メインの明るい領域はマウス周辺に残ります。
-- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Auto-updateを表示し、クリックできます。
+- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Auto-update、その直下の `Check for updates` を表示し、クリックできます。
 - 操作モード終了: `Ctrl+Shift+F` で再切り替え、操作モード中に `Esc`、またはメニュー外をクリック。
 - オーバーレイ再配置: `Ctrl+Shift+R`。Windows仮想デスクトップ切り替え後に表示が戻らない場合の復帰用です。
-- トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Ripple effects、Auto-update、Veil Strength、再配置、終了を操作できます。更新を入れたあとは `Restart to Update` も出ます。
+- トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Ripple effects、Auto-update、その直下の `Check for updates`、Veil Strength、再配置、終了を操作できます。更新を入れたあとは `Restart to Update` も出ます。
 - 設定保存: 透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Auto-updateはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。古い `motionEnabled` は読み捨てます。
-- 自動更新: 既定 ON。Setup インストール版だけが `Routemahiro/focus-veil` の GitHub Releases を確認する。OFF なら確認・ダウンロード・更新確認はしない。ポータブル版は対象外。ダウンロード中だけ右下のタイマー横に細いバーが出る。
+- 自動更新: 既定 ON。Setup インストール版だけが `Routemahiro/focus-veil` の GitHub Releases を確認する。OFF なら自動の確認とダウンロードはしない。`Check for updates` は ON/OFF とは別に、今すぐ確認して更新があれば同じ細いバーで落とす。入れたあとは従来の `Restart to Update` / Quit。ポータブル版と `npm start` は対象外で、その旨を表示し、`Open the GitHub Releases page?` と聞く。Yes までブラウザは開かない。ダウンロード中だけ右下のタイマー横に細いバーが出る。
 - Ctrl単体: Electronウィンドウにフォーカスがある場合のみベストエフォートで反応します。通常のクリック透過状態では背面作業を優先するため、安定操作は `Ctrl+Shift+F` に寄せています。
 
 ## ドキュメント

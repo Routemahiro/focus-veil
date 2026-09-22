@@ -1,6 +1,6 @@
 {
   "name": "focus-veil",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "A lightweight transparent focus overlay for Windows.",
   "main": "src/main.js",
   "private": true,

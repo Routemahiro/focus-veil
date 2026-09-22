@@ -1,17 +1,30 @@
 const firstCheckDelayMs = 10_000;
+const releasesPageUrl = 'https://github.com/Routemahiro/focus-veil/releases/latest';
 
-function isPortableBuild() {
-  return Boolean(process.env.PORTABLE_EXECUTABLE_DIR || process.env.PORTABLE_EXECUTABLE_FILE);
+function isPortableBuild(env = process.env) {
+  return Boolean(env.PORTABLE_EXECUTABLE_DIR || env.PORTABLE_EXECUTABLE_FILE);
 }
 
-function createAutoUpdateController({ app, isSmoke = false }) {
+function createAutoUpdateController({
+  app,
+  isSmoke = false,
+  platform = process.platform,
+  env = process.env,
+  loadUpdaterModule = () => require('electron-updater'),
+  checkDelayMs = firstCheckDelayMs
+}) {
   let autoUpdater = null;
   let settings = { autoUpdateEnabled: true };
   let downloadedVersion = null;
+  let downloadedOrigin = null;
+  let checkOrigin = null;
   let checkTimer = null;
   let listenersAttached = false;
   let onStateChange = null;
   let onDownloadProgress = null;
+  let phase = 'idle';
+  let message = '';
+  let offerReleasesPage = false;
   let downloadProgress = {
     transferring: false,
     percent: 0
@@ -64,16 +77,108 @@ function createAutoUpdateController({ app, isSmoke = false }) {
     return getDownloadProgress();
   }
 
-  function isInstalledWindowsBuild() {
-    return process.platform === 'win32' && app.isPackaged && !isPortableBuild() && !isSmoke;
+  function portableBuild() {
+    return isPortableBuild(env);
+  }
+
+  function canInstallUpdates() {
+    return platform === 'win32' && app.isPackaged && !portableBuild() && !isSmoke;
   }
 
   function isEnabled() {
     return settings.autoUpdateEnabled === true;
   }
 
-  function canCheckOrApply() {
-    return isInstalledWindowsBuild() && isEnabled();
+  function releasesFields() {
+    return {
+      offerReleasesPage: offerReleasesPage === true,
+      releasesUrl: offerReleasesPage ? releasesPageUrl : null
+    };
+  }
+
+  function describeUnavailable() {
+    if (portableBuild()) {
+      return {
+        reason: 'portable',
+        trayLabel: 'Portable build cannot update',
+        message: 'Portable builds cannot install updates. Use the Setup installer.'
+      };
+    }
+
+    if (!app.isPackaged || isSmoke) {
+      return {
+        reason: 'dev',
+        trayLabel: 'npm start cannot update',
+        message: 'npm start cannot install updates. Use the Setup installer.'
+      };
+    }
+
+    return {
+      reason: 'unsupported',
+      trayLabel: 'Setup install required to update',
+      message: 'This build cannot install updates. Use the Windows Setup installer.'
+    };
+  }
+
+  function sessionOpen() {
+    if (!canInstallUpdates()) {
+      return false;
+    }
+
+    if (checkOrigin === 'manual') {
+      return true;
+    }
+
+    return isEnabled();
+  }
+
+  function hasManualResult() {
+    return checkOrigin === 'manual' || downloadedOrigin === 'manual';
+  }
+
+  function trayLabelForPhase() {
+    if (phase === 'checking') {
+      return 'Checking for updates…';
+    }
+
+    if (phase === 'downloading' || downloadProgress.transferring) {
+      return 'Downloading update…';
+    }
+
+    return 'Check for updates';
+  }
+
+  function getUpdateControl() {
+    const progress = getDownloadProgress();
+
+    if (!canInstallUpdates()) {
+      const described = describeUnavailable();
+      return {
+        supported: false,
+        reason: described.reason,
+        phase: 'unavailable',
+        message: described.message,
+        trayLabel: described.trayLabel,
+        downloadedVersion: null,
+        downloadedOrigin: null,
+        transferring: progress.transferring,
+        percent: progress.percent,
+        ...releasesFields()
+      };
+    }
+
+    return {
+      supported: true,
+      reason: null,
+      phase,
+      message,
+      trayLabel: trayLabelForPhase(),
+      downloadedVersion,
+      downloadedOrigin,
+      transferring: progress.transferring,
+      percent: progress.percent,
+      ...releasesFields()
+    };
   }
 
   function configureUpdater(updater) {
@@ -93,7 +198,7 @@ function createAutoUpdateController({ app, isSmoke = false }) {
       return autoUpdater;
     }
 
-    ({ autoUpdater } = require('electron-updater'));
+    ({ autoUpdater } = loadUpdaterModule());
     configureUpdater(autoUpdater);
     return autoUpdater;
   }
@@ -108,24 +213,54 @@ function createAutoUpdateController({ app, isSmoke = false }) {
     updater.on('error', (error) => {
       setDownloadProgress({ transferring: false, percent: 0 });
       console.warn('Focus Veil: auto-update error.', error);
+
+      if (!downloadedVersion) {
+        phase = 'error';
+        message = 'Update check failed.';
+        if (downloadedOrigin !== 'manual') {
+          checkOrigin = null;
+        }
+      }
+
+      notifyStateChange();
     });
 
     updater.on('update-available', (info) => {
-      if (!canCheckOrApply()) {
+      if (!sessionOpen()) {
         setDownloadProgress({ transferring: false, percent: 0 });
         return;
       }
 
+      phase = 'downloading';
+      message = '';
       setDownloadProgress({ transferring: true, percent: 0 });
       console.log(`Focus Veil: update available ${info.version}`);
+      notifyStateChange();
+    });
+
+    updater.on('update-not-available', () => {
+      setDownloadProgress({ transferring: false, percent: 0 });
+
+      if (downloadedVersion) {
+        phase = 'downloaded';
+        message = 'Downloaded. Use Restart to Update.';
+      } else {
+        downloadedOrigin = null;
+        checkOrigin = null;
+        phase = 'current';
+        message = 'Already on the latest release.';
+      }
+
+      notifyStateChange();
     });
 
     updater.on('download-progress', (progress) => {
-      if (!canCheckOrApply()) {
+      if (!sessionOpen()) {
         setDownloadProgress({ transferring: false, percent: 0 });
         return;
       }
 
+      phase = 'downloading';
       setDownloadProgress({
         transferring: true,
         percent: progress?.percent
@@ -135,26 +270,77 @@ function createAutoUpdateController({ app, isSmoke = false }) {
     updater.on('update-downloaded', (info) => {
       setDownloadProgress({ transferring: false, percent: 0 });
 
-      if (!canCheckOrApply()) {
+      if (!sessionOpen()) {
         downloadedVersion = null;
+        downloadedOrigin = null;
+        checkOrigin = null;
+        phase = 'idle';
+        message = '';
         updater.autoInstallOnAppQuit = false;
         notifyStateChange();
         return;
       }
 
       downloadedVersion = info.version;
+      downloadedOrigin = checkOrigin === 'manual' ? 'manual' : 'auto';
+      phase = 'downloaded';
+      message = 'Downloaded. Use Restart to Update.';
       updater.autoInstallOnAppQuit = false;
       console.log(`Focus Veil: update downloaded ${info.version}`);
       notifyStateChange();
     });
   }
 
-  function disableLiveUpdate() {
+  function markUnavailable({ offerReleases = false } = {}) {
     downloadedVersion = null;
-    setDownloadProgress({ transferring: false, percent: 0 });
+    downloadedOrigin = null;
+    checkOrigin = null;
+    offerReleasesPage = Boolean(offerReleases);
+    phase = 'unavailable';
+    message = describeUnavailable().message;
+
     if (checkTimer) {
       clearTimeout(checkTimer);
       checkTimer = null;
+    }
+
+    setDownloadProgress({ transferring: false, percent: 0 });
+
+    if (autoUpdater) {
+      autoUpdater.autoDownload = false;
+      autoUpdater.autoInstallOnAppQuit = false;
+    }
+
+    notifyStateChange();
+  }
+
+  function disableLiveUpdate() {
+    if (checkTimer) {
+      clearTimeout(checkTimer);
+      checkTimer = null;
+    }
+
+    // A manual check is independent of the Auto-update toggle.
+    if (hasManualResult()) {
+      if (autoUpdater) {
+        autoUpdater.autoInstallOnAppQuit = false;
+      }
+      notifyStateChange();
+      return;
+    }
+
+    downloadedVersion = null;
+    downloadedOrigin = null;
+    checkOrigin = null;
+    offerReleasesPage = false;
+    setDownloadProgress({ transferring: false, percent: 0 });
+
+    if (canInstallUpdates()) {
+      phase = 'idle';
+      message = '';
+    } else {
+      phase = 'unavailable';
+      message = describeUnavailable().message;
     }
 
     if (autoUpdater) {
@@ -165,42 +351,107 @@ function createAutoUpdateController({ app, isSmoke = false }) {
     notifyStateChange();
   }
 
-  function checkNow() {
-    if (!canCheckOrApply()) {
-      if (autoUpdater) {
-        autoUpdater.autoInstallOnAppQuit = false;
-      }
-      return Promise.resolve(null);
+  function runCheck(origin) {
+    if (!canInstallUpdates()) {
+      markUnavailable({ offerReleases: origin === 'manual' });
+      return Promise.resolve(getUpdateControl());
     }
+
+    offerReleasesPage = false;
+
+    if (origin !== 'manual' && !isEnabled()) {
+      return Promise.resolve(getUpdateControl());
+    }
+
+    if (phase === 'checking' || phase === 'downloading' || downloadProgress.transferring) {
+      if (origin === 'manual') {
+        checkOrigin = 'manual';
+      }
+      return Promise.resolve(getUpdateControl());
+    }
+
+    checkOrigin = origin;
+    phase = 'checking';
+    message = 'Checking GitHub Releases…';
+    notifyStateChange();
 
     const updater = loadAutoUpdater();
     configureUpdater(updater);
     attachListeners(updater);
 
-    return updater.checkForUpdates().catch((error) => {
-      console.warn('Focus Veil: update check failed.', error);
-      return null;
-    });
+    return updater
+      .checkForUpdates()
+      .then(() => getUpdateControl())
+      .catch((error) => {
+        console.warn('Focus Veil: update check failed.', error);
+        if (phase === 'checking') {
+          phase = 'error';
+          message = 'Update check failed.';
+          setDownloadProgress({ transferring: false, percent: 0 });
+          if (downloadedOrigin !== 'manual') {
+            checkOrigin = null;
+          }
+          notifyStateChange();
+        }
+        return getUpdateControl();
+      });
+  }
+
+  function checkNow() {
+    if (checkOrigin === 'manual' && (phase === 'checking' || phase === 'downloading')) {
+      return Promise.resolve(getUpdateControl());
+    }
+
+    return runCheck('auto');
+  }
+
+  function requestManualCheck() {
+    return runCheck('manual');
+  }
+
+  function resolveReleasesPrompt(confirmed) {
+    if (confirmed === true && offerReleasesPage) {
+      offerReleasesPage = false;
+      notifyStateChange();
+      return releasesPageUrl;
+    }
+
+    if (offerReleasesPage) {
+      offerReleasesPage = false;
+      notifyStateChange();
+    }
+
+    return null;
   }
 
   function scheduleCheck() {
-    if (!canCheckOrApply() || checkTimer) {
+    if (!canInstallUpdates() || !isEnabled() || checkTimer) {
       return;
     }
 
     checkTimer = setTimeout(() => {
       checkTimer = null;
       checkNow();
-    }, firstCheckDelayMs);
+    }, checkDelayMs);
+    if (typeof checkTimer.unref === 'function') {
+      checkTimer.unref();
+    }
   }
 
   function start(nextSettings) {
     settings = nextSettings;
+    if (!canInstallUpdates()) {
+      markUnavailable();
+      return;
+    }
+
     if (!isEnabled()) {
       disableLiveUpdate();
       return;
     }
 
+    phase = 'idle';
+    message = '';
     scheduleCheck();
   }
 
@@ -229,7 +480,11 @@ function createAutoUpdateController({ app, isSmoke = false }) {
   }
 
   function quitAndInstall() {
-    if (!canCheckOrApply() || !downloadedVersion || !autoUpdater) {
+    if (!canInstallUpdates() || !downloadedVersion || !autoUpdater) {
+      return false;
+    }
+
+    if (!isEnabled() && downloadedOrigin !== 'manual') {
       return false;
     }
 
@@ -239,9 +494,8 @@ function createAutoUpdateController({ app, isSmoke = false }) {
 
   function getTrayState() {
     return {
-      supported: isInstalledWindowsBuild(),
-      enabled: isEnabled(),
-      downloadedVersion
+      ...getUpdateControl(),
+      enabled: isEnabled()
     };
   }
 
@@ -262,17 +516,22 @@ function createAutoUpdateController({ app, isSmoke = false }) {
     syncFromSettings,
     preventInstallOnQuit,
     quitAndInstall,
+    checkNow,
+    requestManualCheck,
+    resolveReleasesPrompt,
     getTrayState,
+    getUpdateControl,
     getDownloadProgress,
     setOnStateChange,
     setOnDownloadProgress,
     debugSetDownloadProgress,
-    isPortableBuild,
-    isInstalledWindowsBuild
+    isPortableBuild: portableBuild,
+    isInstalledWindowsBuild: canInstallUpdates
   };
 }
 
 module.exports = {
   createAutoUpdateController,
-  isPortableBuild
+  isPortableBuild,
+  releasesPageUrl
 };

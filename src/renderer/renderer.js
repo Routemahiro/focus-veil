@@ -11,6 +11,13 @@ const idleShortcutHint = document.querySelector('.idle-shortcut-hint');
 const shortcutHint = document.querySelector('.shortcut-hint');
 const updateDownloadBar = document.querySelector('.update-download-bar');
 const updateDownloadFill = document.querySelector('.update-download-fill');
+const manualUpdateControl = document.querySelector('[data-update-control]');
+const manualUpdateButton = document.querySelector('[data-action="check-for-updates"]');
+const manualUpdateNote = document.querySelector('[data-update-state]');
+const releasesPrompt = document.querySelector('[data-releases-prompt]');
+const releasesPromptText = document.querySelector('[data-releases-prompt-text]');
+const openReleasesButton = document.querySelector('[data-action="open-releases"]');
+const dismissReleasesButton = document.querySelector('[data-action="dismiss-releases"]');
 
 const query = new URLSearchParams(window.location.search);
 const isSmoke = query.get('smoke') === '1';
@@ -69,7 +76,15 @@ const state = {
   updateDownload: {
     transferring: false,
     percent: 0
-  }
+  },
+  updateControl: {
+    supported: false,
+    phase: 'idle',
+    message: '',
+    reason: null,
+    offerReleasesPage: false
+  },
+  releasesPageOpened: false
 };
 
 function clamp(value, min, max) {
@@ -763,6 +778,50 @@ function applyUpdateDownload(progress = {}) {
   updateDownloadFill.style.width = transferring ? `${percent}%` : '0%';
 }
 
+function applyUpdateStatus(payload = {}) {
+  if (!payload || typeof payload !== 'object') {
+    return;
+  }
+
+  if (payload.transferring != null) {
+    applyUpdateDownload(payload);
+  }
+
+  if (payload.phase == null && payload.supported == null && payload.message == null) {
+    return;
+  }
+
+  state.updateControl = {
+    supported: Boolean(payload.supported),
+    phase: typeof payload.phase === 'string' ? payload.phase : 'idle',
+    message: typeof payload.message === 'string' ? payload.message : '',
+    reason: payload.reason || null,
+    offerReleasesPage: payload.offerReleasesPage === true
+  };
+
+  if (!manualUpdateButton || !manualUpdateNote) {
+    return;
+  }
+
+  const control = state.updateControl;
+  const busy = control.phase === 'checking' || control.phase === 'downloading';
+  manualUpdateButton.disabled = control.supported ? busy : false;
+  manualUpdateButton.textContent =
+    control.phase === 'checking'
+      ? 'Checking…'
+      : control.phase === 'downloading'
+        ? 'Downloading…'
+        : 'Check for updates';
+
+  const note = control.message.trim();
+  manualUpdateNote.hidden = note.length === 0;
+  manualUpdateNote.textContent = note;
+
+  if (releasesPrompt) {
+    releasesPrompt.hidden = !control.offerReleasesPage;
+  }
+}
+
 function applySettings(settingsPatch = {}) {
   const nextSettings = normalizeSettings({
     ...state.settings,
@@ -858,7 +917,21 @@ function getPublicState() {
       updateDownloadBar != null &&
       !updateDownloadBar.hidden &&
       getComputedStyle(updateDownloadBar).display !== 'none',
-    timerPanelWidth: timerPanel ? Number(timerPanel.getBoundingClientRect().width.toFixed(1)) : 0
+    timerPanelWidth: timerPanel ? Number(timerPanel.getBoundingClientRect().width.toFixed(1)) : 0,
+    manualUpdateText: manualUpdateButton?.textContent?.trim() || '',
+    manualUpdateDisabled: Boolean(manualUpdateButton?.disabled),
+    manualUpdateNote: manualUpdateNote?.textContent?.trim() || '',
+    manualUpdateNoteVisible:
+      hasControls && manualUpdateNote != null && !manualUpdateNote.hidden,
+    manualUpdateUnderAuto:
+      document.querySelector('[data-setting="autoUpdateEnabled"]')?.closest('label')
+        ?.nextElementSibling === manualUpdateControl,
+    releasesPromptVisible:
+      hasControls && releasesPrompt != null && !releasesPrompt.hidden,
+    releasesPromptText: releasesPromptText?.textContent?.trim() || '',
+    releasesPromptHasYes: openReleasesButton != null,
+    releasesPromptHasNo: dismissReleasesButton != null,
+    releasesPageOpened: state.releasesPageOpened === true
   };
 }
 
@@ -893,6 +966,40 @@ settingsControls?.addEventListener('input', (event) => {
   const key = control.dataset.setting;
   const value = control.type === 'checkbox' ? control.checked : Number(control.value);
   requestSettingsUpdate({ [key]: value });
+});
+
+manualUpdateButton?.addEventListener('click', async () => {
+  try {
+    applyUpdateStatus(await window.focusVeil?.checkForUpdates());
+  } catch {
+    applyUpdateStatus({
+      supported: state.updateControl.supported,
+      phase: 'error',
+      message: 'Update check failed.',
+      offerReleasesPage: false
+    });
+  }
+});
+
+openReleasesButton?.addEventListener('click', async () => {
+  try {
+    const result = await window.focusVeil?.openReleasesPage();
+    state.releasesPageOpened = result?.opened === true;
+    applyUpdateStatus(result?.updateControl);
+  } catch {
+    state.releasesPageOpened = false;
+  }
+});
+
+dismissReleasesButton?.addEventListener('click', async () => {
+  try {
+    applyUpdateStatus(await window.focusVeil?.dismissReleasesPrompt());
+  } catch {
+    applyUpdateStatus({
+      ...state.updateControl,
+      offerReleasesPage: false
+    });
+  }
 });
 
 settingsControls?.addEventListener('change', (event) => {
@@ -964,14 +1071,14 @@ window.focusVeil?.onActiveWindowChanged((payload) => {
 });
 
 window.focusVeil?.onUpdateDownloadChanged((payload) => {
-  applyUpdateDownload(payload);
+  applyUpdateStatus(payload);
 });
 
 window.focusVeil?.getMainState().then((mainState) => {
   applySettings(mainState.settings);
   applyTimerState(mainState.timer);
   applyActiveDisplayState({ activeDisplayKey: mainState.activeDisplayKey });
-  applyUpdateDownload(mainState.updateDownload);
+  applyUpdateStatus(mainState.updateControl || mainState.updateDownload);
 });
 
 if (isPreview) {
@@ -1026,6 +1133,14 @@ if (isSmoke) {
     },
     async setUpdateDownloadProgress(progress) {
       applyUpdateDownload(await window.focusVeil?.debugSetUpdateDownload(progress));
+      return getPublicState();
+    },
+    async checkForUpdates() {
+      applyUpdateStatus(await window.focusVeil?.checkForUpdates());
+      return getPublicState();
+    },
+    async dismissReleasesPrompt() {
+      applyUpdateStatus(await window.focusVeil?.dismissReleasesPrompt());
       return getPublicState();
     }
   };

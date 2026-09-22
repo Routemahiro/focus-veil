@@ -167,7 +167,8 @@ body.overlay-only .overlay-ui {
 }
 
 .timer-controls button,
-.settings-controls input {
+.settings-controls input,
+.settings-controls button {
   min-height: 30px;
   border: 1px solid rgba(219, 232, 229, 0.2);
   border-radius: 6px;
@@ -178,10 +179,17 @@ body.overlay-only .overlay-ui {
 }
 
 .timer-controls button:hover,
-.timer-controls button:focus-visible {
+.timer-controls button:focus-visible,
+.settings-controls button:hover,
+.settings-controls button:focus-visible {
   border-color: rgba(130, 207, 196, 0.58);
   background: rgba(57, 79, 81, 0.86);
   outline: none;
+}
+
+.settings-controls button:disabled {
+  color: rgba(192, 218, 214, 0.55);
+  background: rgba(42, 58, 60, 0.4);
 }
 
 body.timer-running .timer-controls button[data-action="start"] {
@@ -243,6 +251,55 @@ body.timer-running .timer-controls button[data-action="start"] {
   width: 14px;
   min-height: 14px;
   accent-color: #9bd8ce;
+}
+
+.manual-update {
+  display: grid;
+  gap: 4px;
+}
+
+.manual-update button {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.manual-update button:disabled {
+  cursor: default;
+}
+
+.manual-update-state {
+  margin: 0;
+  color: rgba(218, 234, 231, 0.72);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.manual-update-state[hidden] {
+  display: none;
+}
+
+.manual-update-prompt {
+  display: grid;
+  gap: 4px;
+}
+
+.manual-update-prompt[hidden] {
+  display: none;
+}
+
+.manual-update-prompt p {
+  margin: 0;
+  color: rgba(218, 234, 231, 0.84);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.manual-update-prompt-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
 }
 
 .idle-shortcut-hint {
