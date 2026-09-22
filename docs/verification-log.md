@@ -2,6 +2,23 @@
 
 ## 2026-09-22
 
+### 待機枠の近接フェード
+
+- マウスが右下の待機コンパクトタイマーに近づくと、その枠だけほぼ透明になる。離れると元の濃さに戻る。
+- 全画面ヴェールはこの動きに合わせない。Focus `#6E9878` / Break `#C9ADC6` は変えない。操作モードの設定パネルは薄くしない。
+- バージョン上げなし。Release なし。
+
+#### 実行コマンド
+
+| コマンド | 結果 | メモ |
+| --- | --- | --- |
+| `node --check src/main.js` | 予定 | 構文確認 |
+| `node --check src/preload.js` | 予定 | 構文確認 |
+| `node --check src/renderer/renderer.js` | 予定 | 構文確認 |
+| `node --check src/auto-update.js` | 予定 | 構文確認 |
+| `node scripts/check-manual-update-state.js` | 予定 | 手動更新の既存確認 |
+| `npm run smoke` | 予定 | 近接フェードと既存 assertion |
+
 ### フェーズで変わる枠色
 
 - 待機中のコンパクトタイマーと、操作メニューの設定パネルの枠をフェーズで変える。スライダーとチェックのアクセントも同じ色。
