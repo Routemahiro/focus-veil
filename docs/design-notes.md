@@ -55,7 +55,7 @@ Focus Veilのv0.1は、作業画面の邪魔にならない透明オーバーレ
 - `src/preload.js`: contextBridge経由で安全に操作モードAPIを公開。
 - `src/renderer/`: Canvas描画、ポモドーロ、タイマーUI、通知演出。
 
-設定はメインプロセスを単一ソースにし、ElectronのuserData配下の `settings.json` へ保存します。対象は暗幕の透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Auto-updateです。smoke実行時は保存を無効化し、検証結果がユーザー設定に影響しないようにしています。自動更新は Windows の Setup インストール版だけが GitHub Releases を確認します。署名検証は行いません。ポータブル / 開発起動では確認しません。ダウンロード中だけ右下タイマーの下に細い進捗バーを出し、完了や未ダウンロードでは消します。
+設定はメインプロセスを単一ソースにし、ElectronのuserData配下の `settings.json` へ保存します。対象は暗幕の透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Auto-updateです。smoke実行時は保存を無効化し、検証結果がユーザー設定に影響しないようにしています。自動更新は Windows の Setup インストール版だけが GitHub Releases を確認します。署名検証は行いません。`Auto-update` は自動確認の ON/OFF で、その直下の `Check for updates` は今すぐの確認です。ポータブル / 開発起動では electron-updater を呼ばず、コントロールに入れられない旨を出します。ダウンロード中だけ右下タイマーの下に細い進捗バーを出し、完了や未ダウンロードでは消します。入れたあとは従来の `Restart to Update` と Quit です。
 
 IPCはoverlay windowかつ `renderer/index.html` からのsenderだけを受け付けます。timer commandは `start`、`pause`、`reset` のallowlistで検証します。rendererにはCSPを設定し、外部navigationと `window.open` は拒否します。
 

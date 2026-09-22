@@ -1,5 +1,25 @@
 # Verification Log
 
+## 2026-09-22
+
+### 手動の更新確認
+
+- Auto-update の直下に `Check for updates` を追加。操作メニューとトレイの両方。
+- インストール済み Setup では今すぐ GitHub Releases を確認し、更新があれば既存の進捗バーと `Restart to Update` / Quit を使う。
+- Auto-update の ON/OFF は自動確認のまま。手動ボタンは OFF でも確認できる。
+- ポータブルと `npm start` は electron-updater を呼ばず、入れられない旨を表示する。バージョン上げなし。Release なし。
+
+#### 実行コマンド
+
+| コマンド | 結果 | メモ |
+| --- | --- | --- |
+| `node --check src/main.js` | 成功 | 構文OK |
+| `node --check src/preload.js` | 成功 | 構文OK |
+| `node --check src/renderer/renderer.js` | 成功 | 構文OK |
+| `node --check src/auto-update.js` | 成功 | 構文OK |
+| `node scripts/check-manual-update-state.js` | 成功 | 手動確認、自動OFF時の手動ダウンロード維持、自動ダウンロードのOFF取消、最新版、失敗、ポータブル、npm start |
+| `npm run smoke` | 成功 | 42 assertion pass。追加: Check for updates が Auto-update の直下、npm start ではダウンロードしない。既存の更新バー、待機ヒント、Motion highlight 削除、Ripple、ヴェールフェードも pass |
+
 ## 2026-09-20
 
 ### タイマーループとヴェールフェード
