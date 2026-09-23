@@ -48,11 +48,11 @@ npm run smoke
 
 - 通常時: 画面右下に残り時間と小さな `Ctrl+Shift+F` ヒントを表示します。待機枠の色は Focus `#6E9878`、Break `#C9ADC6` です。マウスが枠に近づくと待機枠だけほぼ透明になり、離れると戻ります。全画面のヴェールはこの動きに合わせません。ウィンドウはクリック透過です。タイマーは止まらず Focus / Break を繰り返し、切れ目で全画面のヴェールがふわっと切替わります。ヴェール自体の色はフェーズでは変えません。
 - 注目スポット: メインの明るい領域はマウス周辺に残ります。
-- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Auto-update、その直下の `Check for updates` を表示し、クリックできます。設定パネルの枠とスライダー、チェックの色も待機枠と同じく Focus `#6E9878` / Break `#C9ADC6` です。
+- 操作モード: `Ctrl+Shift+F` で切り替えます。操作モード中だけ `Start` / `Pause` / `Reset`、透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Start with Windows、Auto-update、その直下の `Check for updates` を表示し、クリックできます。設定パネルの枠とスライダー、チェックの色も待機枠と同じく Focus `#6E9878` / Break `#C9ADC6` です。
 - 操作モード終了: `Ctrl+Shift+F` で再切り替え、操作モード中に `Esc`、またはメニュー外をクリック。
 - オーバーレイ再配置: `Ctrl+Shift+R`。Windows仮想デスクトップ切り替え後に表示が戻らない場合の復帰用です。
-- トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Ripple effects、Auto-update、その直下の `Check for updates`、Veil Strength、再配置、終了を操作できます。更新を入れたあとは `Restart to Update` も出ます。
-- 設定保存: 透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Auto-updateはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。古い `motionEnabled` は読み捨てます。
+- トレイメニュー: タイマー開始/停止、リセット、操作モード、Overlay enabled、Ripple effects、Start with Windows、Auto-update、その直下の `Check for updates`、Veil Strength、再配置、終了を操作できます。更新を入れたあとは `Restart to Update` も出ます。
+- 設定保存: 透明度、スポットサイズ、スポット境界の柔らかさ、Focus/Break分数、Ripple effects、Overlay enabled、Start with Windows、Auto-updateはElectronのuserData配下に `settings.json` として保存します。smoke実行時は保存しません。古い `motionEnabled` は読み捨てます。Start with Windows は既定 OFF。インストール済み Setup だけが Windows のログイン項目に登録する。ポータブルと `npm start` は登録せず、その旨を操作メニューに出す。
 - 自動更新: 既定 ON。Setup インストール版だけが `Routemahiro/focus-veil` の GitHub Releases を確認する。OFF なら自動の確認とダウンロードはしない。`Check for updates` は ON/OFF とは別に、今すぐ確認して更新があれば同じ細いバーで落とす。入れたあとは従来の `Restart to Update` / Quit。ポータブル版と `npm start` は対象外で、その旨を表示し、`Open the GitHub Releases page?` と聞く。Yes までブラウザは開かない。ダウンロード中だけ右下のタイマー横に細いバーが出る。
 - Ctrl単体: Electronウィンドウにフォーカスがある場合のみベストエフォートで反応します。通常のクリック透過状態では背面作業を優先するため、安定操作は `Ctrl+Shift+F` に寄せています。
 
@@ -96,6 +96,7 @@ npm run smoke
 - マルチモニター/DPI差分はディスプレイごとのboundsで作成する構成に変更済みですが、DPI混在と負座標配置の手動確認は未実施です。
 - BGM/音声通知、複数テーマ、複雑なプロファイル管理はv0.1の対象外です。現在の設定保存は軽量な単一設定ファイルです。
 - 自動更新は Windows の Setup（NSIS）インストール版だけ。ポータブル / 開発起動 (`npm start`) / Linux smoke では確認しない。
+- Windows 起動時の自動起動も Setup インストール版だけ。ポータブルと `npm start` はログイン項目を登録せず、操作メニューにその旨を出す。
 - 配布 EXE は未署名のため、初回実行と自動更新のインストーラーで SmartScreen が出ることがある。
 
 ## プライバシー
