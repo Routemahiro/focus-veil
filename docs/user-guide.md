@@ -10,9 +10,9 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 - 通常時はクリック透過です。背面のブラウザ、エディタ、PDF、IDEなどをそのまま操作できます。
 - 操作が必要なときだけ `Ctrl+Shift+F` で操作モードを開きます。
-- 右下の小さなパネルで、タイマー、暗さ、スポットサイズ、スポットの柔らかさ、Ripple effects、Overlay enabled、Auto-update、`Check for updates` を調整できます。
+- 右下の小さなパネルで、タイマー、暗さ、スポットサイズ、スポットの柔らかさ、Ripple effects、Overlay enabled、Start with Windows、Auto-update、`Check for updates` を調整できます。
 - タイマーは Focus → Break → Focus とループします。Focus終了で全画面のヴェールがふわっと消え、Break終了でふわっと戻ります。`Overlay enabled` を切っているときは、これまでどおり暗幕は出ません。
-- タスクトレイからも開始/停止、リセット、表示復帰、自動更新のON/OFF、今すぐの更新確認、終了ができます。
+- タスクトレイからも開始/停止、リセット、表示復帰、Windows起動時の自動起動、自動更新のON/OFF、今すぐの更新確認、終了ができます。
 - 表示がおかしくなった場合は `Ctrl+Shift+R` でオーバーレイを再配置できます。
 
 ## 比較
@@ -30,7 +30,7 @@ Focus Veilは、Windows上の作業画面に薄い透明オーバーレイを重
 
 普段使いは GitHub Releases の EXE。git / npm は不要。
 
-1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.9.exe` または `FocusVeil-Portable-0.1.9.exe` を落とす。
+1. https://github.com/Routemahiro/focus-veil/releases/latest から `FocusVeil-Setup-0.1.10.exe` または `FocusVeil-Portable-0.1.10.exe` を落とす。
 2. 未署名のため SmartScreen / 「不明な発行元」が出ることがある。詳細を開いて実行する。
 3. インストーラーはスタートメニューに `Focus Veil` を追加する。ポータブルはファイルをダブルクリックする。
 4. 画面にヴェールが乗る。終了はトレイの `Quit`。
@@ -84,6 +84,7 @@ FOCUS_VEIL_READY display-...
 | `Break` | 休憩時間の分数 | 初期値5分 |
 | `Ripple effects` | 水面の揺らぎと薄い波紋 | 既定 ON。不要ならOFF。暗幕やスポットは残る |
 | `Overlay enabled` | 暗幕とスポットライトを有効化 | 一時的に消したい時はOFF |
+| `Start with Windows` | Windows のサインインで Focus Veil を起動 | 既定 OFF。インストール済み Setup だけがログイン項目に登録する。ポータブルと `npm start` は登録せず、その旨を出す |
 | `Auto-update` | GitHub Releases から Setup 更新を自動確認 | 既定 ON。切ると自動の確認とダウンロードはしない |
 | `Check for updates` | 今すぐ GitHub Releases を確認して落とす | Auto-update の直下。ON/OFF とは別。ポータブルと `npm start` では入れられず、その旨を表示してから Releases を開くか聞く |
 
@@ -96,6 +97,7 @@ FOCUS_VEIL_READY display-...
 - 操作モード切替
 - Overlay enabled
 - Ripple effects
+- Start with Windows
 - Auto-update
 - Check for updates（Auto-update の直下。今すぐ確認）
 - Veil Strength
@@ -139,6 +141,7 @@ FOCUS_VEIL_READY display-...
 
 - Overlay enabled
 - Ripple effects（`rippleEnabled`。無い既存ファイルは ON として読む）
+- Start with Windows（`openAtLogin`。無い既存ファイルは OFF として読む）
 - Auto-update（`autoUpdateEnabled`。無い既存ファイルは ON として読む）
 - Veil
 - Size
@@ -147,6 +150,13 @@ FOCUS_VEIL_READY display-...
 - Break分数
 
 `npm run smoke` の短時間テストでは、ユーザー設定を保存しません。古い `motionEnabled` は読み捨てます。
+
+### Windows起動時の自動起動
+
+- 対象は **インストール済み Setup** だけ。Electron の `setLoginItemSettings({ openAtLogin })` で Windows のログイン項目に登録する。
+- 既定は OFF。操作メニューまたはトレイの `Start with Windows` を入れると、次のサインインから Focus Veil が既に動いている。
+- ポータブル EXE と `npm start` は安定したログイン項目を作れない。チェックを入れても登録はせず、`Portable builds cannot start at login. Use the Setup installer.` または `npm start cannot start at login. Use the Setup installer.` を出す。
+- 設定値自体は `settings.json` の `openAtLogin` に残る。Setup で起動したときだけ実際の登録に使う。
 
 ### 自動更新
 
@@ -167,3 +177,4 @@ FOCUS_VEIL_READY display-...
 - Windows仮想デスクトップへの完全追従はElectron標準APIだけでは保証できません。表示が戻らない場合は `Ctrl+Shift+R` を使います。
 - 配布 EXE は未署名です。Windows SmartScreen や「不明な発行元」が、初回実行と自動更新の両方で出ることがあります。
 - 自動更新は Setup インストール版だけです。ポータブル利用者は Releases から新しい EXE を入れ直してください。
+- Windows 起動時の自動起動も Setup インストール版だけです。ポータブルと `npm start` ではログイン項目を登録しません。

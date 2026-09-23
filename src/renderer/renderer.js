@@ -11,6 +11,7 @@ const idleShortcutHint = document.querySelector('.idle-shortcut-hint');
 const shortcutHint = document.querySelector('.shortcut-hint');
 const updateDownloadBar = document.querySelector('.update-download-bar');
 const updateDownloadFill = document.querySelector('.update-download-fill');
+const loginItemNote = document.querySelector('[data-login-item-state]');
 const manualUpdateControl = document.querySelector('[data-update-control]');
 const manualUpdateButton = document.querySelector('[data-action="check-for-updates"]');
 const manualUpdateNote = document.querySelector('[data-update-state]');
@@ -28,6 +29,7 @@ const defaultSettings = {
   veilEnabled: true,
   rippleEnabled: true,
   autoUpdateEnabled: true,
+  openAtLogin: false,
   veilAlpha: 0.16,
   spotlightRadius: 245,
   spotlightSoftness: 0.68,
@@ -77,6 +79,12 @@ const state = {
   lastNotificationCount: 0,
   nextRippleAt: performance.now() + 1800 + Math.random() * 1800,
   ripples: [],
+  loginItem: {
+    supported: false,
+    reason: null,
+    message: '',
+    applied: false
+  },
   updateDownload: {
     transferring: false,
     percent: 0
@@ -763,6 +771,10 @@ function normalizeSettings(candidate = {}) {
       typeof candidate.autoUpdateEnabled === 'boolean'
         ? candidate.autoUpdateEnabled
         : defaultSettings.autoUpdateEnabled,
+    openAtLogin:
+      typeof candidate.openAtLogin === 'boolean'
+        ? candidate.openAtLogin
+        : defaultSettings.openAtLogin,
     veilAlpha: clamp(Number(candidate.veilAlpha) || defaultSettings.veilAlpha, 0.04, 0.3),
     spotlightRadius: Math.round(
       clamp(Number(candidate.spotlightRadius) || defaultSettings.spotlightRadius, 140, 360)
@@ -796,6 +808,27 @@ function syncSettingsControls() {
       control.value = String(value);
     }
   }
+}
+
+function applyLoginItem(control = {}) {
+  if (!control || typeof control !== 'object') {
+    return;
+  }
+
+  state.loginItem = {
+    supported: Boolean(control.supported),
+    reason: control.reason || null,
+    message: typeof control.message === 'string' ? control.message : '',
+    applied: control.applied === true
+  };
+
+  if (!loginItemNote) {
+    return;
+  }
+
+  const note = state.loginItem.message.trim();
+  loginItemNote.hidden = note.length === 0;
+  loginItemNote.textContent = note;
 }
 
 function applyUpdateDownload(progress = {}) {
@@ -979,7 +1012,10 @@ function getPublicState() {
     releasesPromptText: releasesPromptText?.textContent?.trim() || '',
     releasesPromptHasYes: openReleasesButton != null,
     releasesPromptHasNo: dismissReleasesButton != null,
-    releasesPageOpened: state.releasesPageOpened === true
+    releasesPageOpened: state.releasesPageOpened === true,
+    loginItemSupported: state.loginItem.supported === true,
+    loginItemNote: loginItemNote?.textContent?.trim() || '',
+    loginItemNoteVisible: hasControls && loginItemNote != null && !loginItemNote.hidden
   };
 }
 
@@ -1110,6 +1146,7 @@ window.focusVeil?.onTimerStateChanged((timerState) => {
 
 window.focusVeil?.onSettingsChanged((payload) => {
   applySettings(payload?.settings);
+  applyLoginItem(payload?.loginItem);
 });
 
 window.focusVeil?.onActiveDisplayChanged((payload) => {
@@ -1126,6 +1163,7 @@ window.focusVeil?.onUpdateDownloadChanged((payload) => {
 
 window.focusVeil?.getMainState().then((mainState) => {
   applySettings(mainState.settings);
+  applyLoginItem(mainState.loginItem);
   applyTimerState(mainState.timer);
   applyActiveDisplayState({ activeDisplayKey: mainState.activeDisplayKey });
   applyUpdateStatus(mainState.updateControl || mainState.updateDownload);
@@ -1180,6 +1218,8 @@ if (isSmoke) {
     async setSettings(patch) {
       applySettings(patch);
       await window.focusVeil?.updateSettings(patch);
+      const mainState = await window.focusVeil?.getMainState();
+      applyLoginItem(mainState?.loginItem);
       return getPublicState();
     },
     async setUpdateDownloadProgress(progress) {

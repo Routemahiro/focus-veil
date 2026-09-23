@@ -1,6 +1,29 @@
 # Verification Log
 
-## 2026-09-22
+## 2026-09-23
+
+### Windows起動時の自動起動
+
+- 操作メニューとトレイに `Start with Windows` を追加。既定 OFF。`settings.json` の `openAtLogin` に保存する。
+- インストール済み Setup だけが Electron の `setLoginItemSettings({ openAtLogin })` でログイン項目を登録する。
+- ポータブルと `npm start` は登録せず、コントロールにその旨を出す。登録したふりをしない。
+- ヴェールフェード、タイマーループ、フェーズ色、近接フェード、更新バー、待機ヒント、手動更新、Motion highlight 削除は変えない。バージョン上げなし。Release なし。
+
+#### 実行コマンド
+
+| コマンド | 結果 | メモ |
+| --- | --- | --- |
+| `node --check src/main.js` | 成功 | 構文OK |
+| `node --check src/preload.js` | 成功 | 構文OK |
+| `node --check src/renderer/renderer.js` | 成功 | 構文OK |
+| `node --check src/auto-update.js` | 成功 | 構文OK |
+| `node --check src/login-item.js` | 成功 | 構文OK |
+| `node scripts/check-manual-update-state.js` | 成功 | 手動更新の既存確認は pass |
+| `node scripts/check-login-item-state.js` | 成功 | Setup だけ setLoginItemSettings。ポータブル / npm start / smoke / 非Windows は呼ばない |
+| `npm run smoke` | 成功 | 58 assertion pass。追加: 既定 OFF、ON/OFF、操作メニュー表示、npm start は登録しない旨を出す。近接フェード、ヴェールフェード、タイマーループ、Focus/Break 色、更新バー、待機ヒント、手動更新、Motion highlight 削除も pass |
+
+### 待機枠の近接フェード
+
 
 ### 待機枠の近接フェード
 
