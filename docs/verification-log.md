@@ -20,7 +20,7 @@
 | `node --check src/login-item.js` | 成功 | 構文OK |
 | `node scripts/check-manual-update-state.js` | 成功 | 手動更新の既存確認は pass |
 | `node scripts/check-login-item-state.js` | 成功 | Setup だけ setLoginItemSettings。ポータブル / npm start / smoke / 非Windows は呼ばない |
-| `npm run smoke` | 成功 | 既存 assertion に加え、既定 OFF、ON/OFF、操作メニュー表示、npm start は登録しない旨を出す |
+| `npm run smoke` | 成功 | 58 assertion pass。追加: 既定 OFF、ON/OFF、操作メニュー表示、npm start は登録しない旨を出す。近接フェード、ヴェールフェード、タイマーループ、Focus/Break 色、更新バー、待機ヒント、手動更新、Motion highlight 削除も pass |
 
 ### 待機枠の近接フェード
 
