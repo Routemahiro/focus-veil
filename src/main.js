@@ -14,6 +14,7 @@ const {
   screen
 } = require('electron');
 const { createAutoUpdateController } = require('./auto-update');
+const { createLoginItemController } = require('./login-item');
 
 const isSmoke = process.argv.includes('--smoke');
 let koffi = null;
@@ -36,6 +37,7 @@ const defaultSettings = {
   veilEnabled: true,
   rippleEnabled: true,
   autoUpdateEnabled: true,
+  openAtLogin: false,
   veilAlpha: 0.16,
   spotlightRadius: 245,
   spotlightSoftness: 0.68,
@@ -45,6 +47,7 @@ const defaultSettings = {
 
 const overlayWindows = new Map();
 const autoUpdate = createAutoUpdateController({ app, isSmoke });
+const loginItem = createLoginItemController({ app, isSmoke });
 let releasesPageOpenCount = 0;
 
 let controlWindow = null;
@@ -110,6 +113,7 @@ function normalizeSettings(candidate = {}) {
       candidate.autoUpdateEnabled,
       defaultSettings.autoUpdateEnabled
     ),
+    openAtLogin: readBoolean(candidate.openAtLogin, defaultSettings.openAtLogin),
     veilAlpha: Number(
       readNumber(candidate.veilAlpha, defaultSettings.veilAlpha, 0.04, 0.3).toFixed(3)
     ),
@@ -190,11 +194,16 @@ function scheduleSettingsSave() {
   }, 300);
 }
 
-function broadcastSettings(source = 'main') {
-  const payload = {
+function getSettingsPayload(source = 'main') {
+  return {
     settings: getSettingsSnapshot(),
+    loginItem: loginItem.getControl(),
     source
   };
+}
+
+function broadcastSettings(source = 'main') {
+  const payload = getSettingsPayload(source);
 
   for (const win of getOverlayList()) {
     sendToWindow(win, 'focus-veil:settings-state', payload);
@@ -216,6 +225,7 @@ function updateSettings(patch = {}, source = 'main') {
   const previousWorkMinutes = settings.workMinutes;
   const previousBreakMinutes = settings.breakMinutes;
   const previousAutoUpdateEnabled = settings.autoUpdateEnabled;
+  const previousOpenAtLogin = settings.openAtLogin;
   settings = normalizeSettings({
     ...settings,
     ...patch
@@ -223,6 +233,10 @@ function updateSettings(patch = {}, source = 'main') {
 
   if (previousAutoUpdateEnabled !== settings.autoUpdateEnabled) {
     autoUpdate.syncFromSettings(settings);
+  }
+
+  if (previousOpenAtLogin !== settings.openAtLogin) {
+    loginItem.syncFromSettings(settings);
   }
 
   const durationChanged =
@@ -887,6 +901,12 @@ function updateTrayMenu() {
       click: (item) => updateSettings({ rippleEnabled: item.checked }, 'tray')
     },
     {
+      label: 'Start with Windows',
+      type: 'checkbox',
+      checked: settings.openAtLogin,
+      click: (item) => updateSettings({ openAtLogin: item.checked }, 'tray')
+    },
+    {
       label: 'Auto-update',
       type: 'checkbox',
       checked: settings.autoUpdateEnabled,
@@ -1178,6 +1198,33 @@ async function runSmoke() {
       spotlightSettingsState.settings
     );
 
+    assertSmoke(
+      assertions,
+      'start with Windows is off by default',
+      spotlightSettingsState.settings.openAtLogin === false,
+      spotlightSettingsState.settings
+    );
+
+    const openAtLoginOnState = await executeInRenderer(
+      'window.focusVeilSmoke.setSettings({ openAtLogin: true })'
+    );
+    assertSmoke(
+      assertions,
+      'start with Windows setting can be enabled',
+      openAtLoginOnState.settings.openAtLogin === true,
+      openAtLoginOnState.settings
+    );
+
+    const openAtLoginOffState = await executeInRenderer(
+      'window.focusVeilSmoke.setSettings({ openAtLogin: false })'
+    );
+    assertSmoke(
+      assertions,
+      'start with Windows setting can be disabled again',
+      openAtLoginOffState.settings.openAtLogin === false,
+      openAtLoginOffState.settings
+    );
+
     const autoUpdateOffState = await executeInRenderer(
       'window.focusVeilSmoke.setSettings({ autoUpdateEnabled: false })'
     );
@@ -1335,6 +1382,26 @@ async function runSmoke() {
       'operation menu shows Auto-update toggle',
       autoUpdateLabel.includes('Auto-update'),
       { autoUpdateLabel }
+    );
+
+    const openAtLoginLabel = await executeInRenderer(
+      'document.querySelector(\'[data-setting="openAtLogin"]\')?.closest("label")?.innerText?.trim() || ""'
+    );
+    const openAtLoginNoteState = await executeInRenderer('window.focusVeilSmoke.getState()');
+    assertSmoke(
+      assertions,
+      'operation menu shows Start with Windows toggle',
+      openAtLoginLabel.includes('Start with Windows'),
+      { openAtLoginLabel }
+    );
+    assertSmoke(
+      assertions,
+      'npm start does not pretend Start with Windows registered',
+      openAtLoginNoteState.loginItemNoteVisible &&
+        openAtLoginNoteState.loginItemNote.includes('npm start cannot start at login') &&
+        openAtLoginNoteState.loginItemNote.includes('Setup installer') &&
+        openAtLoginNoteState.loginItemSupported === false,
+      openAtLoginNoteState
     );
 
     const beforeReleasesPrompt = await executeInRenderer('window.focusVeilSmoke.getState()');
@@ -1669,10 +1736,7 @@ function createOverlayWindow(descriptor) {
     applyOperationModeToWindow(win);
     sendOperationMode('ready');
     sendToWindow(win, 'focus-veil:timer-state', getTimerSnapshot());
-    sendToWindow(win, 'focus-veil:settings-state', {
-      settings: getSettingsSnapshot(),
-      source: 'ready'
-    });
+    sendToWindow(win, 'focus-veil:settings-state', getSettingsPayload('ready'));
     sendToWindow(win, 'focus-veil:active-display', {
       activeDisplayKey: activeDisplayKey ?? detectActiveDisplayKey(),
       source: 'ready'
@@ -1693,10 +1757,7 @@ function createOverlayWindow(descriptor) {
     console.log(`FOCUS_VEIL_READY ${descriptor.key}`);
     sendOperationMode('load');
     sendToWindow(win, 'focus-veil:timer-state', getTimerSnapshot());
-    sendToWindow(win, 'focus-veil:settings-state', {
-      settings: getSettingsSnapshot(),
-      source: 'load'
-    });
+    sendToWindow(win, 'focus-veil:settings-state', getSettingsPayload('load'));
     sendToWindow(win, 'focus-veil:active-display', {
       activeDisplayKey: activeDisplayKey ?? detectActiveDisplayKey(),
       source: 'load'
@@ -1807,6 +1868,7 @@ ipcMain.handle('focus-veil:get-main-state', (event) => {
     smoke: isSmoke,
     activeDisplayKey: activeDisplayKey ?? detectActiveDisplayKey(),
     settings: getSettingsSnapshot(),
+    loginItem: loginItem.getControl(),
     timer: getTimerSnapshot(),
     updateDownload: autoUpdate.getDownloadProgress(),
     updateControl: autoUpdate.getUpdateControl(),
@@ -1879,6 +1941,7 @@ app.whenReady().then(async () => {
   }
 
   await loadSettings();
+  loginItem.syncFromSettings(settings);
   autoUpdate.setOnStateChange(() => {
     updateTrayMenu();
     broadcastUpdateDownload('state');

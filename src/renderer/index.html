@@ -98,6 +98,16 @@
             <input type="checkbox" data-setting="veilEnabled" checked>
             <span>Overlay enabled</span>
           </label>
+          <div class="login-item" data-login-item-control>
+            <label
+              class="toggle-line"
+              title="Installed Setup only. Starts Focus Veil when Windows signs in."
+            >
+              <input type="checkbox" data-setting="openAtLogin">
+              <span>Start with Windows</span>
+            </label>
+            <p id="login-item-state" class="login-item-state" data-login-item-state hidden></p>
+          </div>
           <label class="toggle-line" title="Installed Setup only. Checks GitHub Releases.">
             <input type="checkbox" data-setting="autoUpdateEnabled" checked>
             <span>Auto-update</span>
